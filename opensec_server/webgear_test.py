@@ -1,3 +1,6 @@
+"""
+WebGear test server
+"""
 import uvicorn
 from vidgear.gears.asyncio import WebGear
 
