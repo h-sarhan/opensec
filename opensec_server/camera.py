@@ -11,7 +11,7 @@ from vidgear.gears import CamGear
 from vidgear.gears.asyncio import WebGear
 from vidgear.gears.helper import reducer
 
-DEBUG = True
+DEBUG = False
 
 
 class Camera:
@@ -28,7 +28,7 @@ class Camera:
 
     def __init__(self, name, source):
         self.name = name
-        self.source = self._validate_source(source)
+        self.source = Camera.validate_source(source)
         self.camera = self.connect_to_cam()
 
     def connect_to_cam(self):
@@ -60,7 +60,8 @@ class Camera:
         """
         self.camera.stop()
 
-    def _validate_source(self, source):
+    @staticmethod
+    def validate_source(source):
         """
         doc
         """
@@ -74,7 +75,7 @@ class Camera:
 
             return source
 
-        if not source.startswith("rtsp"):
+        if not source.startswith("rtsp://"):
             raise ValueError(err_message)
 
         if not source.endswith("/"):
@@ -157,7 +158,7 @@ class CameraHub:
         """
         while True:
 
-            frames = [cam.read_frame(reduce_amount=0.5) for cam in self.cameras]
+            frames = [cam.read_frame(reduce_amount=50) for cam in self.cameras]
 
             for frame in frames:
                 if frame is None:
