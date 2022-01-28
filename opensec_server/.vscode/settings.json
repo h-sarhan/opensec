@@ -1,4 +1,19 @@
 {
-  "python.linting.flake8Enabled": true,
-  "python.formatting.provider": "black"
+  "python.formatting.provider": "black",
+  "cSpell.words": [
+    "fastdct",
+    "imshow",
+    "OPENCV",
+    "RETR",
+    "rtsp",
+    "uvicorn",
+    "vidgear",
+    "yolo",
+    "Yolo",
+    "YOLO",
+    "yolov",
+    "zzmd"
+  ],
+  "python.linting.enabled": true,
+  "python.linting.pylintEnabled": true
 }
