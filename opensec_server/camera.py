@@ -6,12 +6,21 @@ The CameraHub class has several methods that act as wrappers around lower-level
 VidGear and OpenCV functions. These methods are responsible for streaming the
 camera feeds to the front end and for object detection.
 """
+import asyncio
+
+# import os
+import time
+
 import cv2 as cv
-from vidgear.gears import CamGear
+import uvicorn
+from starlette.responses import StreamingResponse
+from starlette.routing import Route
+from vidgear.gears import VideoGear
 from vidgear.gears.asyncio import WebGear
+from vidgear.gears.asyncio.helper import reducer as async_reducer
 from vidgear.gears.helper import reducer
 
-DEBUG = False
+DEBUG = True
 
 
 class Camera:
@@ -19,17 +28,15 @@ class Camera:
     doc
     """
 
-    stream_options = {
-        "frame_size_reduction": 50,
-        "jpeg_compression_quality": 70,
-        "jpeg_compression_fastdct": True,
-        "jpeg_compression_fastupsample": True,
-    }
-
-    def __init__(self, name, source):
+    def __init__(self, name, source, reset_attempts=50, reset_delay=5):
         self.name = name
+        self.reset_attempts = reset_attempts
+        self.reset_delay = reset_delay
         self.source = Camera.validate_source(source)
         self.camera = self.connect_to_cam()
+
+        # Stores the last frame in case of a reconnection
+        self.last_frame = None
 
     def connect_to_cam(self):
         """
@@ -37,27 +44,45 @@ class Camera:
         """
 
         try:
-            camera = CamGear(source=self.source, logging=DEBUG).start()
-        except RuntimeError as err:
-            raise ValueError(
-                "ERROR: Could not connect to camera using the provided source."
-            ) from err
+            camera = VideoGear(source=self.source, logging=DEBUG).start()
+        except RuntimeError:
+            print("Attempting reconnection")
         return camera
 
-    def read_frame(self, reduce_amount=None):
+    def read(self, reduce_amount=None):
         """
         doc
         """
-        frame = self.camera.read()
-        if reduce_amount is None:
-            return frame
+        if self.reset_attempts > 0:
+            frame = self.camera.read()
+            if frame is None:
+                self.stop()
+                self.reset_attempts -= 1
 
-        return reducer(frame, percentage=reduce_amount)
+                print(f"""Re-connection Attempt-{self.reset_attempts}""")
+
+                time.sleep(self.reset_delay)
+                self.camera = self.connect_to_cam()
+
+                # return previous frame
+                if reduce_amount is None:
+                    return self.last_frame
+                return reducer(self.last_frame, percentage=reduce_amount)
+            else:
+                self.last_frame = frame
+                if reduce_amount is None:
+                    return frame
+                return reducer(frame, percentage=reduce_amount)
+        else:
+            return None
 
     def stop(self):
         """
         doc
         """
+        print("STOPPED")
+        self.reset_attempts = 0
+        self.last_frame = None
         self.camera.stop()
 
     @staticmethod
@@ -82,6 +107,53 @@ class Camera:
             return source + "/"
 
         return source
+
+    @staticmethod
+    def create_video_response(frame_producer):
+        """
+        Creates a video streaming http response to use with
+        the uvicorn web server
+        """
+
+        async def video_response(scope):
+            assert scope["type"] in ["http", "https"]
+            await asyncio.sleep(0.00001)
+            return StreamingResponse(
+                frame_producer(),
+                media_type="multipart/x-mixed-replace; boundary=frame",
+            )
+
+        return video_response
+
+    def create_frame_producer(self):
+        """
+        Creates a frame producer (i.e. a generator) that will be used to make
+        HTTP video streaming responses
+        """
+
+        async def frame_producer():
+
+            while True:
+                frame = self.read()
+
+                if frame is None:
+                    break
+
+                frame = await async_reducer(frame, percentage=50)
+
+                encode_param = [int(cv.IMWRITE_JPEG_QUALITY), 60]
+                encoded_img = cv.imencode(".jpg", frame, encode_param)[1].tobytes()
+                # yield frame in byte format
+                yield (
+                    b"--frame\r\nContent-Type:video/jpeg2000\r\n\r\n"
+                    + encoded_img
+                    + b"\r\n"
+                )
+                await asyncio.sleep(0.00001)
+            # close stream
+            self.stop()
+
+        return frame_producer
 
     def __str__(self):
         return f"Camera({self.name}, {self.source})"
@@ -159,7 +231,7 @@ class CameraHub:
         """
         while True:
 
-            frames = [cam.read_frame(reduce_amount=50) for cam in self.cameras]
+            frames = [cam.read(reduce_amount=50) for cam in self.cameras]
 
             for frame in frames:
                 if frame is None:
@@ -176,8 +248,42 @@ class CameraHub:
         for cam in self.cameras:
             cam.stop()
 
+    def start_web_server(self):
+        """
+        Starts a local web server to stream the cameras' live feed
+        across the network
+        """
+
+        stream_options = {
+            "custom_data_location": "./",
+            "frame_size_reduction": 80,
+            "jpeg_compression_quality": 40,
+            "jpeg_compression_fastdct": True,
+            "jpeg_compression_fastupsample": True,
+        }
+
+        # initialize WebGear app without any source
+        web = WebGear(logging=True, **stream_options)
+
+        frame_producers = [cam.create_frame_producer() for cam in self.cameras]
+
+        web.config["generator"] = frame_producers[0]
+
+        video_responses = [
+            Camera.create_video_response(producer) for producer in frame_producers[1:]
+        ]
+
+        for index, video_response in enumerate(video_responses):
+            web.routes.append(Route(f"/video{index+2}", endpoint=video_response))
+
+        # run this app on Uvicorn server at address http://localhost:8000/
+        uvicorn.run(web(), host="0.0.0.0", port=8000)
+
+        # close app safely
+        web.shutdown()
+
     def __str__(self):
-        pass
+        return f"CameraHub(num_cameras={self.num_cameras}, detection={self.detection})"
 
 
 if __name__ == "__main__":
@@ -187,4 +293,5 @@ if __name__ == "__main__":
     cam_2 = Camera("IP cam", "rtsp://admin:123456@192.168.1.226:554")
     cam_hub.add_camera(cam_1)
     cam_hub.add_camera(cam_2)
-    cam_hub.display_cams()
+    # cam_hub.display_cams()
+    cam_hub.start_web_server()

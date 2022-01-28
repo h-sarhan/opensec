@@ -38,8 +38,8 @@ class TestCamera(unittest.TestCase):
     def test_reducer(self):
         cam = Camera("test_reducer", self.working_camera)
 
-        w_1, h_1, _ = cam.read_frame().shape
-        w_2, h_2, _ = cam.read_frame(50).shape
+        w_1, h_1, _ = cam.read().shape
+        w_2, h_2, _ = cam.read(50).shape
 
         self.assertLess(w_2, w_1)
         self.assertLess(h_2, h_1)

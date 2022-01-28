@@ -18,8 +18,22 @@ limitations under the License.
 ===============================================
 
 -->
-{% extends "base.html" %}
-{% block content %}
+{% extends "base.html" %} {% block content %}
 <h1 class="glow">WebGear Video Feed</h1>
-<img src="/video" id="imgcontainer" onclick="toggleFullScreen('imgcontainer')" class="img-fluid mx-auto d-block rounded" alt="Responsive Feed" title="click once to toggle fullscreen">
+<img
+  src="/video"
+  id="imgcontainer"
+  onclick="toggleFullScreen('imgcontainer')"
+  class="img-fluid mx-auto d-block rounded"
+  alt="Responsive Feed"
+  title="click once to toggle fullscreen"
+/>
+<img
+  src="/video2"
+  id="imgcontainer2"
+  onclick="toggleFullScreen('imgcontainer2')"
+  class="img-fluid mx-auto d-block rounded"
+  alt="Responsive Feed"
+  title="click once to toggle fullscreen"
+/>
 {% endblock %}
