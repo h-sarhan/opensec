@@ -1,6 +1,6 @@
 import unittest
 
-from camera import Camera
+from camera import Camera, CameraHub
 
 
 class TestCamera(unittest.TestCase):
@@ -53,6 +53,63 @@ class TestCamera(unittest.TestCase):
         self.assertEqual(cam_1, cam_2)
         cam_1.stop()
         cam_2.stop()
+
+
+class TestCameraHub(unittest.TestCase):
+    def setUp(self):
+        # Replace these values with working cameras in your environment
+        self.working_cameras = [0, "rtsp://admin:123456@192.168.1.226:554"]
+
+    def test_add_cameras(self):
+        cam_1 = Camera("test", self.working_cameras[0])
+        cam_2 = Camera("test", self.working_cameras[1])
+
+        cam_hub = CameraHub()
+        cam_hub.add_camera(cam_1)
+        cam_hub.add_camera(cam_2)
+
+        self.assertEqual(cam_hub.num_cameras, 2)
+        cam_1.stop()
+        cam_2.stop()
+
+    def test_get_camera(self):
+        cam_1 = Camera("test", self.working_cameras[0])
+        cam_2 = Camera("test", self.working_cameras[1])
+
+        cam_hub = CameraHub()
+        cam_hub.add_camera(cam_1)
+        cam_hub.add_camera(cam_2)
+
+        cam_1_from_hub = cam_hub.get_camera(0)
+        cam_2_from_hub = cam_hub.get_camera(1)
+
+        self.assertEqual(cam_1, cam_1_from_hub)
+        self.assertEqual(cam_2, cam_2_from_hub)
+        cam_1.stop()
+        cam_2.stop()
+
+        with self.assertRaises(ValueError):
+            cam_hub.get_camera(5)
+
+    def test_remove_camera(self):
+        cam_1 = Camera("test", self.working_cameras[0])
+        cam_2 = Camera("test", self.working_cameras[1])
+
+        cam_hub = CameraHub()
+        cam_hub.add_camera(cam_1)
+        cam_hub.add_camera(cam_2)
+
+        cam_hub.remove_camera(cam_1)
+        self.assertEqual(cam_hub.num_cameras, 1)
+
+        cam_hub.remove_camera(0)
+        self.assertEqual(cam_hub.num_cameras, 0)
+
+        with self.assertRaises(ValueError):
+            cam_hub.remove_camera(cam_1)
+
+        with self.assertRaises(ValueError):
+            cam_hub.remove_camera(0)
 
 
 if __name__ == "__main__":

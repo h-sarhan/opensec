@@ -128,29 +128,30 @@ class CameraHub:
 
         return self.cameras[index]
 
-    def remove_camera(self, camera=None, index=None):
+    def remove_camera(self, camera):
         """
         Remove a camera using either the camera index or the camera
         object itself
         """
 
-        if camera and index:
-            raise ValueError("ERROR: You cannot provide both a camera and an index.")
-        if camera is None and index is None:
-            raise ValueError("ERROR: Provide either a camera or an index.")
-
-        if camera:
-            if not isinstance(camera, Camera):
-                raise ValueError("ERROR: `camera` must be a Camera object")
-
+        if isinstance(camera, Camera):
             self.cameras.remove(camera)
             camera.stop()
-        else:
-            if index > self.num_cameras or index < 0:
+
+        elif isinstance(camera, int):
+            if camera > self.num_cameras or camera < 0:
                 raise ValueError("ERROR: Invalid index.")
 
-            camera = self.cameras.pop(index)
+            try:
+                camera = self.cameras.pop(camera)
+            except IndexError as err:
+                raise ValueError("ERROR:Invalid index") from err
+
             camera.stop()
+        else:
+            raise ValueError(
+                "ERROR: `camera` parameter must be an integer or camera object"
+            )
 
     def display_cams(self):
         """
@@ -174,6 +175,9 @@ class CameraHub:
         cv.destroyAllWindows()
         for cam in self.cameras:
             cam.stop()
+
+    def __str__(self):
+        pass
 
 
 if __name__ == "__main__":
