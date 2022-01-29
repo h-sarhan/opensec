@@ -15,6 +15,7 @@
     <video id="video1"></video>
     <video id="video2"></video>
     <video id="video3"></video>
+    <video id="video4"></video>
     <button id="play-btn">Play streams</button>
     <script>
       function loadVideo(id, source) {
@@ -32,11 +33,12 @@
         });
       }
 
-      var ids = ['video1', 'video2', 'video3'];
+      var ids = ['video1', 'video2', 'video3', 'video4'];
       var sources = [
         'http://192.168.1.54:8080/stream/IP cam-stream.m3u8',
         'http://192.168.1.54:8080/stream/IP cam 2-stream.m3u8',
         'http://192.168.1.54:8080/stream/IP cam 3-stream.m3u8',
+        'http://192.168.1.54:8080/stream/webcam-stream.m3u8',
       ];
 
       sources.forEach((source, idx) => {
@@ -55,6 +57,7 @@
           video.currentTime = video.duration - 2;
         });
       }
+
       var playBtn = document.getElementById('play-btn');
       playBtn.addEventListener('click', () => {
         playVideos(videos);

@@ -117,42 +117,81 @@ class Camera:
         doc
         """
 
-        stream_process = subprocess.Popen(
-            [
-                shutil.which("gst-launch-1.0"),
-                "-v",
-                "rtspsrc",
-                f'location="{self.source}"',
-                "!",
-                "rtph264depay",
-                "!",
-                "avdec_h264",
-                "!",
-                "clockoverlay",
-                "!",
-                "videoconvert",
-                "!",
-                "videoscale",
-                "!",
-                "video/x-raw,width=640, height=360",
-                "!",
-                "x264enc",
-                "bitrate=512",
-                "!",
-                'video/x-h264,profile="high"',
-                "!",
-                "mpegtsmux",
-                "!",
-                "hlssink",
-                f"playlist-root=http://{LOCAL_IP_ADDRESS}:8080/stream",
-                f"playlist-location=./stream/{self.name}-stream.m3u8",
-                f"location=./stream/{self.name}-segment.%05d.ts",
-                "target-duration=5",
-                "max-files=5",
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+        if isinstance(self.source, int):
+
+            # Cannot stream webcam and read from it at the same time
+            self.camera.stop()
+
+            stream_process = subprocess.Popen(
+                [
+                    shutil.which("gst-launch-1.0"),
+                    "-v",
+                    "ksvideosrc",
+                    "device-index=",
+                    f"{self.source}",
+                    "!",
+                    "videoconvert",
+                    "!",
+                    "clockoverlay",
+                    "!",
+                    "videoscale",
+                    "!",
+                    "video/x-raw,width=640, height=360",
+                    "!",
+                    "x264enc",
+                    "bitrate=256",
+                    "!",
+                    'video/x-h264,profile="high"',
+                    "!",
+                    "mpegtsmux",
+                    "!",
+                    "hlssink",
+                    f"playlist-root=http://{LOCAL_IP_ADDRESS}:8080/stream",
+                    f"location=./stream/{self.name}-segment.%05d.ts",
+                    f"playlist-location=./stream/{self.name}-stream.m3u8",
+                    "target-duration=5",
+                    "max-files=5",
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        else:
+            stream_process = subprocess.Popen(
+                [
+                    shutil.which("gst-launch-1.0"),
+                    "-v",
+                    "rtspsrc",
+                    f'location="{self.source}"',
+                    "!",
+                    "rtph264depay",
+                    "!",
+                    "avdec_h264",
+                    "!",
+                    "clockoverlay",
+                    "!",
+                    "videoconvert",
+                    "!",
+                    "videoscale",
+                    "!",
+                    "video/x-raw,width=640, height=360",
+                    "!",
+                    "x264enc",
+                    "bitrate=512",
+                    "!",
+                    'video/x-h264,profile="high"',
+                    "!",
+                    "mpegtsmux",
+                    "!",
+                    "hlssink",
+                    f"playlist-root=http://{LOCAL_IP_ADDRESS}:8080/stream",
+                    f"playlist-location=./stream/{self.name}-stream.m3u8",
+                    f"location=./stream/{self.name}-segment.%05d.ts",
+                    "target-duration=5",
+                    "max-files=5",
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
 
         return stream_process
 
@@ -277,16 +316,15 @@ class CameraHub:
 if __name__ == "__main__":
 
     cam_hub = CameraHub()
-    # cam_1 = Camera("webcam", 0)
+    cam_1 = Camera("webcam", 0)
     cam_2 = Camera("IP cam", "rtsp://admin:123456@192.168.1.226:554")
     cam_3 = Camera("IP cam 2", "rtsp://admin:123456@192.168.1.226:554")
     cam_4 = Camera("IP cam 3", "rtsp://admin:123456@192.168.1.226:554")
-    # cam_hub.add_camera(cam_1)
+    cam_hub.add_camera(cam_1)
     cam_hub.add_camera(cam_2)
     cam_hub.add_camera(cam_3)
     cam_hub.add_camera(cam_4)
     cam_hub.start_camera_streams()
     # time.sleep(20)
-    # cam_hub.stop_camera_streams()
     input("Press enter to stop camera streaming")
     cam_hub.stop_camera_streams()
