@@ -1,3 +1,8 @@
+stream/
+
+# Untracked folder for experiments
+other/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

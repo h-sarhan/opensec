@@ -6,21 +6,19 @@ The CameraHub class has several methods that act as wrappers around lower-level
 VidGear and OpenCV functions. These methods are responsible for streaming the
 camera feeds to the front end and for object detection.
 """
-import asyncio
-
-# import os
+import shutil
+import socket
+import subprocess
 import time
 
 import cv2 as cv
-import uvicorn
-from starlette.responses import StreamingResponse
-from starlette.routing import Route
 from vidgear.gears import VideoGear
-from vidgear.gears.asyncio import WebGear
-from vidgear.gears.asyncio.helper import reducer as async_reducer
 from vidgear.gears.helper import reducer
 
 DEBUG = True
+
+hostname = socket.gethostname()
+LOCAL_IP_ADDRESS = socket.gethostbyname(hostname)
 
 
 class Camera:
@@ -28,10 +26,10 @@ class Camera:
     doc
     """
 
-    def __init__(self, name, source, reset_attempts=50, reset_delay=5):
+    def __init__(self, name, source, max_reset_attempts=20):
         self.name = name
-        self.reset_attempts = reset_attempts
-        self.reset_delay = reset_delay
+        self.reset_attempts = 0
+        self.max_reset_attempts = max_reset_attempts
         self.source = Camera.validate_source(source)
         self.camera = self.connect_to_cam()
 
@@ -45,23 +43,29 @@ class Camera:
 
         try:
             camera = VideoGear(source=self.source, logging=DEBUG).start()
-        except RuntimeError:
-            print("Attempting reconnection")
-        return camera
+            return camera
+        except RuntimeError as err:
+            print(f"""Re-connection Attempt-{self.reset_attempts}""")
+            time.sleep(0.5)
+            self.reset_attempts += 1
+            if self.reset_attempts >= self.max_reset_attempts:
+                raise RuntimeError("ERROR: Could not reconnect to camera") from err
+            self.connect_to_cam()
 
     def read(self, reduce_amount=None):
         """
         doc
         """
-        if self.reset_attempts > 0:
+
+        if self.reset_attempts < self.max_reset_attempts:
             frame = self.camera.read()
             if frame is None:
-                self.stop()
-                self.reset_attempts -= 1
+                self.camera.stop()
+                self.reset_attempts += 1
 
                 print(f"""Re-connection Attempt-{self.reset_attempts}""")
 
-                time.sleep(self.reset_delay)
+                time.sleep(0.5)
                 self.camera = self.connect_to_cam()
 
                 # return previous frame
@@ -108,52 +112,49 @@ class Camera:
 
         return source
 
-    @staticmethod
-    def create_video_response(frame_producer):
+    def start_camera_stream(self):
         """
-        Creates a video streaming http response to use with
-        the uvicorn web server
+        doc
         """
 
-        async def video_response(scope):
-            assert scope["type"] in ["http", "https"]
-            await asyncio.sleep(0.00001)
-            return StreamingResponse(
-                frame_producer(),
-                media_type="multipart/x-mixed-replace; boundary=frame",
-            )
+        stream_process = subprocess.Popen(
+            [
+                shutil.which("gst-launch-1.0"),
+                "-v",
+                "rtspsrc",
+                f'location="{self.source}"',
+                "!",
+                "rtph264depay",
+                "!",
+                "avdec_h264",
+                "!",
+                "clockoverlay",
+                "!",
+                "videoconvert",
+                "!",
+                "videoscale",
+                "!",
+                "video/x-raw,width=640, height=360",
+                "!",
+                "x264enc",
+                "bitrate=512",
+                "!",
+                'video/x-h264,profile="high"',
+                "!",
+                "mpegtsmux",
+                "!",
+                "hlssink",
+                f"playlist-root=http://{LOCAL_IP_ADDRESS}:8080/stream",
+                f"playlist-location=./stream/{self.name}-stream.m3u8",
+                f"location=./stream/{self.name}-segment.%05d.ts",
+                "target-duration=5",
+                "max-files=5",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
 
-        return video_response
-
-    def create_frame_producer(self):
-        """
-        Creates a frame producer (i.e. a generator) that will be used to make
-        HTTP video streaming responses
-        """
-
-        async def frame_producer():
-
-            while True:
-                frame = self.read()
-
-                if frame is None:
-                    break
-
-                frame = await async_reducer(frame, percentage=50)
-
-                encode_param = [int(cv.IMWRITE_JPEG_QUALITY), 60]
-                encoded_img = cv.imencode(".jpg", frame, encode_param)[1].tobytes()
-                # yield frame in byte format
-                yield (
-                    b"--frame\r\nContent-Type:video/jpeg2000\r\n\r\n"
-                    + encoded_img
-                    + b"\r\n"
-                )
-                await asyncio.sleep(0.00001)
-            # close stream
-            self.stop()
-
-        return frame_producer
+        return stream_process
 
     def __str__(self):
         return f"Camera({self.name}, {self.source})"
@@ -170,6 +171,7 @@ class CameraHub:
     def __init__(self):
         self.cameras = []
         self.detection = False
+        self.camera_streams = []
 
     @property
     def num_cameras(self):
@@ -248,39 +250,25 @@ class CameraHub:
         for cam in self.cameras:
             cam.stop()
 
-    def start_web_server(self):
+    def start_camera_streams(self):
         """
-        Starts a local web server to stream the cameras' live feed
-        across the network
+        Starts streaming each camera's live feed across the network
         """
 
-        stream_options = {
-            "custom_data_location": "./",
-            "frame_size_reduction": 80,
-            "jpeg_compression_quality": 40,
-            "jpeg_compression_fastdct": True,
-            "jpeg_compression_fastupsample": True,
-        }
+        self.camera_streams = [camera.start_camera_stream() for camera in self.cameras]
 
-        # initialize WebGear app without any source
-        web = WebGear(logging=True, **stream_options)
+    def stop_camera_streams(self):
+        """
+        doc
+        """
+        if not self.camera_streams:
+            print("Camera stream is not running")
+            return
 
-        frame_producers = [cam.create_frame_producer() for cam in self.cameras]
+        for stream in self.camera_streams:
+            stream.kill()
 
-        web.config["generator"] = frame_producers[0]
-
-        video_responses = [
-            Camera.create_video_response(producer) for producer in frame_producers[1:]
-        ]
-
-        for index, video_response in enumerate(video_responses):
-            web.routes.append(Route(f"/video{index+2}", endpoint=video_response))
-
-        # run this app on Uvicorn server at address http://localhost:8000/
-        uvicorn.run(web(), host="0.0.0.0", port=8000)
-
-        # close app safely
-        web.shutdown()
+        self.camera_streams = []
 
     def __str__(self):
         return f"CameraHub(num_cameras={self.num_cameras}, detection={self.detection})"
@@ -289,9 +277,16 @@ class CameraHub:
 if __name__ == "__main__":
 
     cam_hub = CameraHub()
-    cam_1 = Camera("webcam", 0)
+    # cam_1 = Camera("webcam", 0)
     cam_2 = Camera("IP cam", "rtsp://admin:123456@192.168.1.226:554")
-    cam_hub.add_camera(cam_1)
+    cam_3 = Camera("IP cam 2", "rtsp://admin:123456@192.168.1.226:554")
+    cam_4 = Camera("IP cam 3", "rtsp://admin:123456@192.168.1.226:554")
+    # cam_hub.add_camera(cam_1)
     cam_hub.add_camera(cam_2)
-    # cam_hub.display_cams()
-    cam_hub.start_web_server()
+    cam_hub.add_camera(cam_3)
+    cam_hub.add_camera(cam_4)
+    cam_hub.start_camera_streams()
+    # time.sleep(20)
+    # cam_hub.stop_camera_streams()
+    input("Press enter to stop camera streaming")
+    cam_hub.stop_camera_streams()

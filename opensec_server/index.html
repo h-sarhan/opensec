@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/openplayerjs@latest/dist/openplayer.min.css"
+    /> -->
+    <title>Document</title>
+  </head>
+  <body>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <video id="video1"></video>
+    <video id="video2"></video>
+    <video id="video3"></video>
+    <button id="play-btn">Play streams</button>
+    <script>
+      function loadVideo(id, source) {
+        var video = document.getElementById(id);
+        var hls = new Hls();
+        // bind them together
+        hls.attachMedia(video);
+        // MEDIA_ATTACHED event is fired by hls object once MediaSource is ready
+        hls.on(Hls.Events.MEDIA_ATTACHED, function () {
+          console.log('video and hls.js are now bound together !');
+          hls.loadSource(source);
+          hls.on(Hls.Events.MANIFEST_PARSED, function (event, data) {
+            console.log('manifest loaded, found ' + data.levels.length + ' quality level');
+          });
+        });
+      }
+
+      var ids = ['video1', 'video2', 'video3'];
+      var sources = [
+        'http://192.168.1.54:8080/stream/IP cam-stream.m3u8',
+        'http://192.168.1.54:8080/stream/IP cam 2-stream.m3u8',
+        'http://192.168.1.54:8080/stream/IP cam 3-stream.m3u8',
+      ];
+
+      sources.forEach((source, idx) => {
+        loadVideo(ids[idx], source);
+      });
+
+      var videos = [];
+
+      ids.forEach((id) => {
+        videos.push(document.getElementById(id));
+      });
+
+      function playVideos(videos) {
+        videos.forEach((video) => {
+          video.play();
+          video.currentTime = video.duration - 2;
+        });
+      }
+      var playBtn = document.getElementById('play-btn');
+      playBtn.addEventListener('click', () => {
+        playVideos(videos);
+      });
+
+      setTimeout(() => {
+        playVideos(videos);
+      }, 30000);
+    </script>
+  </body>
+</html>
