@@ -15,94 +15,231 @@ import cv2 as cv
 from vidgear.gears import VideoGear
 from vidgear.gears.helper import reducer
 
-DEBUG = True
+CAM_DEBUG = True
 
-hostname = socket.gethostname()
-LOCAL_IP_ADDRESS = socket.gethostbyname(hostname)
+HOST_NAME = socket.gethostname()
+LOCAL_IP_ADDRESS = socket.gethostbyname(HOST_NAME)
+
+# TODO: Add support for MJPEG streams
+# TODO: Add error handling to start_camera_stream
+# TODO: DOCUMENT CAMERAHUB
+# TODO: ADD DETECTION CODE
 
 
 class Camera:
     """
-    doc
+    This class provides a high-level API to a wireless IP camera located on the network.
+    With this API you can read frames from the camera and stream the camera feed
+    across the local network.
+
+    Public Attributes
+    ----------
+    name: str
+        The name to give the camera
+
+    source: str
+        The RTSP URL that is used to access the camera feed
+
+    connected: boolean
+        A boolean flag to show whether or not the camera is connected
     """
 
-    def __init__(self, name, source, max_reset_attempts=20):
+    def __init__(self, name, source, max_reset_attempts=10):
+        """
+        Inits Camera objects.
+        """
         self.name = name
-        self.reset_attempts = 0
-        self.max_reset_attempts = max_reset_attempts
         self.source = Camera.validate_source(source)
-        self.camera = self.connect_to_cam()
+        self.connected = False
 
-        # Stores the last frame in case of a reconnection
-        self.last_frame = None
-
-    def connect_to_cam(self):
-        """
-        doc
-        """
-
-        try:
-            camera = VideoGear(source=self.source, logging=DEBUG).start()
-            return camera
-        except RuntimeError as err:
-            print(f"""Re-connection Attempt-{self.reset_attempts}""")
-            time.sleep(0.5)
-            self.reset_attempts += 1
-            if self.reset_attempts >= self.max_reset_attempts:
-                raise RuntimeError("ERROR: Could not reconnect to camera") from err
-            self.connect_to_cam()
+        self._stream_process = None
+        self._camera = self._connect_to_cam()
+        self._reset_attempts = 0
+        self._max_reconnect_attempts = max_reset_attempts
 
     def read(self, reduce_amount=None):
         """
-        doc
+        Reads a frame from the camera.
+
+        Returns a frame from the remote camera with an option
+        to reduce its size.
+
+        Parameters
+        ----------
+        reduce_amount : int, optional
+            Percentage amount to reduce the frame size by.
+            If `reduce_amount` is None the original frame will be
+            returned, by default None
+
+        Returns
+        -------
+        numpy array
+            Returns an n-dimensional matrix representing a single frame
+            from the remote camera. Typically this matrix will have a shape of
+            (width, height, number_of_channels).
         """
 
-        if self.reset_attempts < self.max_reset_attempts:
-            frame = self.camera.read()
-            if frame is None:
-                self.camera.stop()
-                self.reset_attempts += 1
+        # Read a frame from the camera
+        frame = self._camera.read()
+        if frame is None:
+            # Attempt a reconnection if the frame cannot be read
+            try:
+                self._camera = self._connect_to_cam(reset=True)
+            except RuntimeError:
+                # Stop the camera if the reconnection attempt failed
+                print(f"ERROR: Could not connect to {self.name}.")
+                print("Stopping camera.")
+                self.stop()
 
-                print(f"""Re-connection Attempt-{self.reset_attempts}""")
-
-                time.sleep(0.5)
-                self.camera = self.connect_to_cam()
-
-                # return previous frame
-                if reduce_amount is None:
-                    return self.last_frame
-                return reducer(self.last_frame, percentage=reduce_amount)
-            else:
-                self.last_frame = frame
-                if reduce_amount is None:
-                    return frame
-                return reducer(frame, percentage=reduce_amount)
-        else:
-            return None
+        # Return the frame with an optional reduction in size
+        if reduce_amount is None:
+            return frame
+        return reducer(frame, percentage=reduce_amount)
 
     def stop(self):
         """
-        doc
+        Stops the camera video capture object and stream.
+
+        Sets the reset count to zero, sets the placeholder frame flag to True,
+        and stops the camera stream and video capture object.
         """
-        print("STOPPED")
-        self.reset_attempts = 0
-        self.last_frame = None
-        self.camera.stop()
+        self.connected = False
+        self._reset_attempts = 0
+
+        self.stop_camera_stream()
+        self._camera.stop()
+
+        print(f"{self.name} stopped.")
+
+    def start_camera_stream(self, re_encode=False, scale=None, bitrate=512):
+        """
+        Starts streaming the camera feed to a server and saves the stream process.
+
+
+        Parameters
+        ----------
+        re_encode : bool, optional
+            Choose whether or not to re-encode the camera stream, by default False
+
+        scale : tuple, optional
+            Choose to give a new scale to the video.
+            If None, a frame with the same size as the source will be
+            returned, by default None
+
+            Warning: If `re_encode` is False then this setting will be ignored.
+
+        bitrate : int, optional
+            Choose a bitrate for the re-encoded video, by default 512
+
+            Warning: If `re_encode` is False then this setting wil be ignored
+
+        Raises
+        ------
+        RuntimeError
+            A RuntimeError is raised if Gstreamer is not installed.
+        """
+        if not shutil.which("gst-launch-1.0"):
+            raise RuntimeError("ERROR: Please install the latest version of GStreamer.")
+
+        if not re_encode and (scale or bitrate):
+            print("Warning: The stream is not being re-encoded so the ", end="")
+            if scale:
+                print("`scale` parameter will be ignored.")
+            if bitrate:
+                print("`bitrate` parameter will be ignored.")
+
+        # Path to the gstreamer executable
+        gstreamer_arg = [shutil.which("gst-launch-1.0")]
+
+        # These arguments define the video source
+        video_source_args = [
+            "-v",
+            "rtspsrc",
+            f'location="{self.source}"',
+            "!",
+            "rtph264depay",
+        ]
+
+        # These arguments define the re-encoding arguments
+        re_encode_args = ["!", "avdec_h264", "!", "videoconvert", "!"]
+
+        if scale:
+            width, height = scale
+            re_encode_args += [
+                "videoscale",
+                "!",
+                f"video/x-raw,width={width} height={height}",
+            ]
+
+        re_encode_args += [
+            "!",
+            "x264enc",
+            f"bitrate={bitrate}",
+            "!",
+            'video/x-h264,profile="high"',
+        ]
+
+        # These arguments define what container to use for the stream
+        muxer_args = ["!", "mpegtsmux"]
+
+        # These arguments define HLS stream arguments
+        stream_args = [
+            "!",
+            "hlssink",
+            f"playlist-root=http://{LOCAL_IP_ADDRESS}:8080/stream",
+            f"playlist-location=./stream/{self.name}-stream.m3u8",
+            f"location=./stream/{self.name}-segment.%05d.ts",
+            "target-duration=5",
+            "max-files=5",
+        ]
+
+        # Assemble the arguments that will be used with GStreamer
+        stream_process_args = gstreamer_arg + video_source_args
+        if re_encode:
+            stream_process_args += re_encode_args
+
+        stream_process_args += muxer_args + stream_args
+
+        # Create the Gstreamer process
+        self._stream_process = subprocess.Popen(
+            stream_process_args,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+    def stop_camera_stream(self):
+        """
+        Stops the camera stream process if it is running.
+        """
+        if not self._stream_process:
+            print("Camera stream is not running")
+        else:
+            self._stream_process.kill()
 
     @staticmethod
     def validate_source(source):
         """
-        doc
+        Helper function to check that the source is a valid RTSP url
+
+        Parameters
+        ----------
+        source : Any
+            Source object that is being validated.
+
+        Returns
+        -------
+        str
+            Will return the source if it is valid.
+
+        Raises
+        ------
+        ValueError
+            Will raise a ValueError if the source is not valid.
         """
-        err_message = "ERROR: Source must be an non-negative integer or RTSP URL"
-        if not isinstance(source, (int, str)):
+
+        err_message = "ERROR: Source must be an RTSP URL"
+        if not isinstance(source, str):
             raise ValueError(err_message)
-
-        if isinstance(source, int):
-            if source < 0:
-                raise ValueError(err_message)
-
-            return source
 
         if not source.startswith("rtsp://"):
             raise ValueError(err_message)
@@ -112,93 +249,56 @@ class Camera:
 
         return source
 
-    def start_camera_stream(self):
+    def _connect_to_cam(self, reset=False):
         """
-        doc
+        Attempts connection to remote camera.
+
+        If connection fails, a new connection attempt will occur after
+        a short delay. The maximum number of reconnection attempts is
+        controlled by `self._max_reconnect_attempts`.
+
+        Parameters
+        ----------
+        reset : boolean, optional
+            If reset is True the camera will attempt a reconnection, by default False
+
+        Returns
+        -------
+        VideoGear object
+            An object that can read frames from a remote camera
+
+        Raises
+        ------
+        RuntimeError
+            A RuntimeError is raised when `self._reset_attempts`
+            reaches the maximum value
         """
 
-        if isinstance(self.source, int):
+        if reset:
+            time.sleep(2)
+            self._reset_attempts += 1
+            if self._reset_attempts >= self._max_reconnect_attempts:
+                raise RuntimeError("ERROR: Could not reconnect to camera")
+            self._camera.stop()
+            print(f"{self.name} reconnection attempt #{self._reset_attempts}")
 
-            # Cannot stream webcam and read from it at the same time
-            self.camera.stop()
-
-            stream_process = subprocess.Popen(
-                [
-                    shutil.which("gst-launch-1.0"),
-                    "-v",
-                    "ksvideosrc",
-                    "device-index=",
-                    f"{self.source}",
-                    "!",
-                    "videoconvert",
-                    "!",
-                    "clockoverlay",
-                    "!",
-                    "videoscale",
-                    "!",
-                    "video/x-raw,width=640, height=360",
-                    "!",
-                    "x264enc",
-                    "bitrate=256",
-                    "!",
-                    'video/x-h264,profile="high"',
-                    "!",
-                    "mpegtsmux",
-                    "!",
-                    "hlssink",
-                    f"playlist-root=http://{LOCAL_IP_ADDRESS}:8080/stream",
-                    f"location=./stream/{self.name}-segment.%05d.ts",
-                    f"playlist-location=./stream/{self.name}-stream.m3u8",
-                    "target-duration=5",
-                    "max-files=5",
-                ],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-        else:
-            stream_process = subprocess.Popen(
-                [
-                    shutil.which("gst-launch-1.0"),
-                    "-v",
-                    "rtspsrc",
-                    f'location="{self.source}"',
-                    "!",
-                    "rtph264depay",
-                    "!",
-                    "avdec_h264",
-                    "!",
-                    "clockoverlay",
-                    "!",
-                    "videoconvert",
-                    "!",
-                    "videoscale",
-                    "!",
-                    "video/x-raw,width=640, height=360",
-                    "!",
-                    "x264enc",
-                    "bitrate=512",
-                    "!",
-                    'video/x-h264,profile="high"',
-                    "!",
-                    "mpegtsmux",
-                    "!",
-                    "hlssink",
-                    f"playlist-root=http://{LOCAL_IP_ADDRESS}:8080/stream",
-                    f"playlist-location=./stream/{self.name}-stream.m3u8",
-                    f"location=./stream/{self.name}-segment.%05d.ts",
-                    "target-duration=5",
-                    "max-files=5",
-                ],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-
-        return stream_process
+        try:
+            camera = VideoGear(source=self.source, logging=CAM_DEBUG).start()
+            self.connected = True
+            return camera
+        except RuntimeError:
+            self._connect_to_cam(reset=True)
 
     def __str__(self):
+        """
+        String representation of a Camera object.
+        """
         return f"Camera({self.name}, {self.source})"
 
     def __eq__(self, other):
+        """
+        Define the equals operator for Camera objects.
+        """
         return self.name == other.name and self.source == other.source
 
 
@@ -274,10 +374,6 @@ class CameraHub:
 
             frames = [cam.read(reduce_amount=50) for cam in self.cameras]
 
-            for frame in frames:
-                if frame is None:
-                    break
-
             for cam, frame in zip(self.cameras, frames):
                 cv.imshow(cam.name, frame)
 
@@ -305,7 +401,8 @@ class CameraHub:
             return
 
         for stream in self.camera_streams:
-            stream.kill()
+            if stream:
+                stream.kill()
 
         self.camera_streams = []
 
@@ -316,10 +413,10 @@ class CameraHub:
 if __name__ == "__main__":
 
     cam_hub = CameraHub()
-    cam_1 = Camera("webcam", 0)
-    cam_2 = Camera("IP cam", "rtsp://admin:123456@192.168.1.226:554")
-    cam_3 = Camera("IP cam 2", "rtsp://admin:123456@192.168.1.226:554")
-    cam_4 = Camera("IP cam 3", "rtsp://admin:123456@192.168.1.226:554")
+    cam_1 = Camera("IP cam 1", "rtsp://admin:123456@192.168.1.226:554")
+    cam_2 = Camera("IP cam 2", "rtsp://admin:123456@192.168.1.226:554")
+    cam_3 = Camera("IP cam 3", "rtsp://admin:123456@192.168.1.226:554")
+    cam_4 = Camera("IP cam 4", "rtsp://admin:123456@192.168.1.226:554")
     cam_hub.add_camera(cam_1)
     cam_hub.add_camera(cam_2)
     cam_hub.add_camera(cam_3)
