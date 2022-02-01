@@ -3,6 +3,7 @@
   "cSpell.words": [
     "avdec",
     "depay",
+    "dotenv",
     "fastdct",
     "gethostbyname",
     "gstreamer",

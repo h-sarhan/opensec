@@ -1,20 +1,25 @@
+"""
+Unit tests for the `camera.py` module.
+
+These tests cover both the Camera and CameraHub classes. 
+"""
 import unittest
 
-from camera import Camera, CameraHub
+from camera import TEST_CAM, Camera, CameraHub
 
 
 class TestCamera(unittest.TestCase):
     def setUp(self):
-        self.non_valid_sources = ["https://123.123.123:554/", "54", -23]
+        self.non_valid_sources = ["https://123.123.123:554/", "54", 23]
         self.valid_sources = [
             "rtsp://123.123.123:554",
             "rtsp://username:pass@123.123.123:554",
-            23,
+            "rtsp://username:pass@123.123.123:554/stream.amp",
         ]
 
-        # Camera 0 is usually going to be a laptop or usb webcam,
-        # if you don't have one of those then most of these tests will fail
-        self.working_camera = 0
+        # Replace this value with a working camera in your environment
+        # if you want to pass the below tests
+        self.working_camera = TEST_CAM
         self.non_working_camera = "rtsp://123.123.123:554"
 
     def test_camera_non_valid_sources(self):
@@ -24,14 +29,15 @@ class TestCamera(unittest.TestCase):
 
     def test_camera_valid_sources(self):
         for valid_source in self.valid_sources:
-            self.assertIsNotNone(Camera.validate_source(valid_source))
+            src = Camera.validate_source(valid_source)
+            self.assertTrue(src == valid_source or src == f"{valid_source}/")
 
     def test_create_camera(self):
         cam_1 = Camera("test_1", self.working_camera)
         self.assertIsNotNone(cam_1)
         cam_1.stop()
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(RuntimeError):
             cam_2 = Camera("test_2", self.non_working_camera)
             cam_2.stop()
 
@@ -39,7 +45,7 @@ class TestCamera(unittest.TestCase):
         cam = Camera("test_reducer", self.working_camera)
 
         w_1, h_1, _ = cam.read().shape
-        w_2, h_2, _ = cam.read(50).shape
+        w_2, h_2, _ = cam.read(reduce_amount=50).shape
 
         self.assertLess(w_2, w_1)
         self.assertLess(h_2, h_1)
@@ -47,8 +53,8 @@ class TestCamera(unittest.TestCase):
         cam.stop()
 
     def test_camera_equality(self):
-        cam_1 = Camera("test", 0)
-        cam_2 = Camera("test", 0)
+        cam_1 = Camera("test", self.working_camera)
+        cam_2 = Camera("test", self.working_camera)
 
         self.assertEqual(cam_1, cam_2)
         cam_1.stop()
@@ -57,8 +63,8 @@ class TestCamera(unittest.TestCase):
 
 class TestCameraHub(unittest.TestCase):
     def setUp(self):
-        # Replace these values with working cameras in your environment
-        self.working_cameras = [0, "rtsp://admin:123456@192.168.1.226:554"]
+        # Replace this value with a working camera in your environment
+        self.working_camera = [TEST_CAM] * 4
 
     def test_add_cameras(self):
         cam_1 = Camera("test", self.working_cameras[0])

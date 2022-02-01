@@ -6,14 +6,23 @@ The CameraHub class has several methods that act as wrappers around lower-level
 VidGear and OpenCV functions. These methods are responsible for streaming the
 camera feeds to the front end and for object detection.
 """
+import os
 import shutil
 import socket
 import subprocess
 import time
 
 import cv2 as cv
+from dotenv import load_dotenv
 from vidgear.gears import VideoGear
 from vidgear.gears.helper import reducer
+
+# Loading environment variables
+ENV_PATH = "../.env"
+load_dotenv()
+
+TEST_CAM = os.getenv("TEST_CAM")
+
 
 CAM_DEBUG = True
 
@@ -44,7 +53,7 @@ class Camera:
         A boolean flag to show whether or not the camera is connected
     """
 
-    def __init__(self, name, source, max_reset_attempts=10):
+    def __init__(self, name, source, max_reset_attempts=5):
         """
         Inits Camera objects.
         """
@@ -52,10 +61,12 @@ class Camera:
         self.source = Camera.validate_source(source)
         self.connected = False
 
+        self._camera = None
         self._stream_process = None
-        self._camera = self._connect_to_cam()
         self._reset_attempts = 0
         self._max_reconnect_attempts = max_reset_attempts
+
+        self._connect_to_cam()
 
     def read(self, reduce_amount=None):
         """
@@ -84,7 +95,7 @@ class Camera:
         if frame is None:
             # Attempt a reconnection if the frame cannot be read
             try:
-                self._camera = self._connect_to_cam(reset=True)
+                self._reconnect()
             except RuntimeError:
                 # Stop the camera if the reconnection attempt failed
                 print(f"ERROR: Could not connect to {self.name}.")
@@ -107,7 +118,8 @@ class Camera:
         self._reset_attempts = 0
 
         self.stop_camera_stream()
-        self._camera.stop()
+        if self._camera:
+            self._camera.stop()
 
         print(f"{self.name} stopped.")
 
@@ -211,15 +223,15 @@ class Camera:
         """
         Stops the camera stream process if it is running.
         """
-        if not self._stream_process:
-            print("Camera stream is not running")
-        else:
+        if self._stream_process:
             self._stream_process.kill()
+        else:
+            print("Camera stream is not running")
 
     @staticmethod
     def validate_source(source):
         """
-        Helper function to check that the source is a valid RTSP url
+        Helper function to check that the source is a valid RTSP URL
 
         Parameters
         ----------
@@ -228,7 +240,7 @@ class Camera:
 
         Returns
         -------
-        str
+        source: str
             Will return the source if it is valid.
 
         Raises
@@ -249,23 +261,38 @@ class Camera:
 
         return source
 
-    def _connect_to_cam(self, reset=False):
+    def _connect_to_cam(self):
         """
         Attempts connection to remote camera.
 
-        If connection fails, a new connection attempt will occur after
-        a short delay. The maximum number of reconnection attempts is
-        controlled by `self._max_reconnect_attempts`.
-
-        Parameters
-        ----------
-        reset : boolean, optional
-            If reset is True the camera will attempt a reconnection, by default False
+        If connection fails, a reconnection attempt will be made.
 
         Returns
         -------
         VideoGear object
             An object that can read frames from a remote camera
+
+        """
+
+        try:
+            camera = VideoGear(source=self.source, logging=CAM_DEBUG).start()
+            self.connected = True
+            self._camera = camera
+        except RuntimeError:
+            self._reconnect()
+
+    def _reconnect(self):
+        """
+        Attempts a reconnection to the camera
+
+        A maximum of `self._max_reconnect_attempts` will be made before raising
+        an exception.
+
+        Returns
+        -------
+        camera: VideoGear object
+            A VideoGear video capture object will be returned after a
+            successful connection.
 
         Raises
         ------
@@ -273,21 +300,23 @@ class Camera:
             A RuntimeError is raised when `self._reset_attempts`
             reaches the maximum value
         """
+        while self._reset_attempts < self._max_reconnect_attempts:
+            print(f"{self.name} reconnection attempt #{self._reset_attempts+1}")
 
-        if reset:
-            time.sleep(2)
             self._reset_attempts += 1
-            if self._reset_attempts >= self._max_reconnect_attempts:
-                raise RuntimeError("ERROR: Could not reconnect to camera")
-            self._camera.stop()
-            print(f"{self.name} reconnection attempt #{self._reset_attempts}")
+            time.sleep(2)
 
-        try:
-            camera = VideoGear(source=self.source, logging=CAM_DEBUG).start()
-            self.connected = True
-            return camera
-        except RuntimeError:
-            self._connect_to_cam(reset=True)
+            if self._camera:
+                self._camera.stop()
+
+            try:
+                camera = VideoGear(source=self.source, logging=CAM_DEBUG).start()
+                self.connected = True
+                self._camera = camera
+            except RuntimeError:
+                pass
+
+        raise RuntimeError("ERROR: Could not reconnect to camera")
 
     def __str__(self):
         """
@@ -413,10 +442,10 @@ class CameraHub:
 if __name__ == "__main__":
 
     cam_hub = CameraHub()
-    cam_1 = Camera("IP cam 1", "rtsp://admin:123456@192.168.1.226:554")
-    cam_2 = Camera("IP cam 2", "rtsp://admin:123456@192.168.1.226:554")
-    cam_3 = Camera("IP cam 3", "rtsp://admin:123456@192.168.1.226:554")
-    cam_4 = Camera("IP cam 4", "rtsp://admin:123456@192.168.1.226:554")
+    cam_1 = Camera("IP cam 1", TEST_CAM)
+    cam_2 = Camera("IP cam 2", TEST_CAM)
+    cam_3 = Camera("IP cam 3", TEST_CAM)
+    cam_4 = Camera("IP cam 4", TEST_CAM)
     cam_hub.add_camera(cam_1)
     cam_hub.add_camera(cam_2)
     cam_hub.add_camera(cam_3)
