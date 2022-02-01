@@ -93,6 +93,7 @@ class Camera:
         # Read a frame from the camera
         frame = self._camera.read()
         if frame is None:
+            self.connected = False
             # Attempt a reconnection if the frame cannot be read
             try:
                 self._reconnect()
@@ -123,13 +124,19 @@ class Camera:
 
         print(f"{self.name} stopped.")
 
-    def start_camera_stream(self, re_encode=False, scale=None, bitrate=512):
+    def start_camera_stream(
+        self, stream_name=None, re_encode=False, scale=None, bitrate=None, logging=False
+    ):
         """
         Starts streaming the camera feed to a server and saves the stream process.
 
 
         Parameters
         ----------
+        stream_name : str, optional
+            Give a name to the stream, if None the name of the
+            camera will be used, by default None
+
         re_encode : bool, optional
             Choose whether or not to re-encode the camera stream, by default False
 
@@ -145,11 +152,21 @@ class Camera:
 
             Warning: If `re_encode` is False then this setting wil be ignored
 
+        logging : bool, optional
+            Choose to view Gstreamer logs, by default False
+
         Raises
         ------
         RuntimeError
             A RuntimeError is raised if Gstreamer is not installed.
         """
+
+        if not os.path.exists("./stream"):
+            os.mkdir("./stream")
+
+        if not stream_name:
+            stream_name = self.name
+
         if not shutil.which("gst-launch-1.0"):
             raise RuntimeError("ERROR: Please install the latest version of GStreamer.")
 
@@ -159,6 +176,9 @@ class Camera:
                 print("`scale` parameter will be ignored.")
             if bitrate:
                 print("`bitrate` parameter will be ignored.")
+
+        if re_encode:
+            bitrate = 512
 
         # Path to the gstreamer executable
         gstreamer_arg = [shutil.which("gst-launch-1.0")]
@@ -199,8 +219,8 @@ class Camera:
             "!",
             "hlssink",
             f"playlist-root=http://{LOCAL_IP_ADDRESS}:8080/stream",
-            f"playlist-location=./stream/{self.name}-stream.m3u8",
-            f"location=./stream/{self.name}-segment.%05d.ts",
+            f"playlist-location=./stream/{stream_name}-stream.m3u8",
+            f"location=./stream/{stream_name}-segment.%05d.ts",
             "target-duration=5",
             "max-files=5",
         ]
@@ -212,11 +232,16 @@ class Camera:
 
         stream_process_args += muxer_args + stream_args
 
+        if logging:
+            console_output = None
+        else:
+            console_output = subprocess.DEVNULL
+
         # Create the Gstreamer process
         self._stream_process = subprocess.Popen(
             stream_process_args,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=console_output,
+            stderr=console_output,
         )
 
     def stop_camera_stream(self):
@@ -433,24 +458,33 @@ class CameraHub:
             if stream:
                 stream.kill()
 
+        for file in os.listdir("./stream"):
+            os.unlink(f"./stream/{file}")
+
         self.camera_streams = []
 
     def __str__(self):
         return f"CameraHub(num_cameras={self.num_cameras}, detection={self.detection})"
 
 
+import requests
+
 if __name__ == "__main__":
 
     cam_hub = CameraHub()
     cam_1 = Camera("IP cam 1", TEST_CAM)
-    cam_2 = Camera("IP cam 2", TEST_CAM)
-    cam_3 = Camera("IP cam 3", TEST_CAM)
-    cam_4 = Camera("IP cam 4", TEST_CAM)
-    cam_hub.add_camera(cam_1)
-    cam_hub.add_camera(cam_2)
-    cam_hub.add_camera(cam_3)
-    cam_hub.add_camera(cam_4)
-    cam_hub.start_camera_streams()
-    # time.sleep(20)
+    # cam_2 = Camera("IP cam 2", TEST_CAM)
+    # cam_3 = Camera("IP cam 3", TEST_CAM)
+    # cam_4 = Camera("IP cam 4", TEST_CAM)
+    # cam_hub.add_camera(cam_1)
+    # cam_hub.add_camera(cam_2)
+    # cam_hub.add_camera(cam_3)
+    # cam_hub.add_camera(cam_4)
+    # cam_hub.start_camera_streams()
+    cam_1.start_camera_stream(stream_name="test")
+    time.sleep(10)
+    req = requests.get(f"http://{LOCAL_IP_ADDRESS}:8080/stream/test-stream.m3u8")
+    print(req.status_code)
     input("Press enter to stop camera streaming")
-    cam_hub.stop_camera_streams()
+    # cam_hub.stop_camera_streams()
+    cam_1.stop_camera_stream()

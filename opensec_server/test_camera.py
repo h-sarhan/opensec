@@ -3,9 +3,13 @@ Unit tests for the `camera.py` module.
 
 These tests cover both the Camera and CameraHub classes. 
 """
+import os
+import time
 import unittest
 
-from camera import TEST_CAM, Camera, CameraHub
+from camera import LOCAL_IP_ADDRESS, TEST_CAM, Camera, CameraHub
+
+PORT = 8080
 
 
 class TestCamera(unittest.TestCase):
@@ -59,6 +63,24 @@ class TestCamera(unittest.TestCase):
         self.assertEqual(cam_1, cam_2)
         cam_1.stop()
         cam_2.stop()
+
+    def test_camera_stream(self):
+        # Clear stream folder
+        if os.path.exists("./stream"):
+            for file in os.listdir("./stream"):
+                os.unlink(f"./stream/{file}")
+
+        cam = Camera("test", self.working_camera)
+
+        cam.start_camera_stream(stream_name="test")
+
+        # Give the stream some time to generate video segment files
+        time.sleep(20)
+
+        cam.stop()
+
+        # Check that stream files have been generated
+        self.assertTrue(os.path.exists("./stream/test-stream.m3u8"))
 
 
 class TestCameraHub(unittest.TestCase):
