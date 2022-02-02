@@ -22,6 +22,7 @@ ENV_PATH = "../.env"
 load_dotenv()
 
 TEST_CAM = os.getenv("TEST_CAM")
+STREAM_DIRECTORY = os.getenv("STREAM_DIRECTORY")
 
 
 CAM_DEBUG = True
@@ -31,7 +32,6 @@ LOCAL_IP_ADDRESS = socket.gethostbyname(HOST_NAME)
 
 # TODO: Add support for MJPEG streams
 # TODO: Add error handling to start_camera_stream
-# TODO: DOCUMENT CAMERAHUB
 # TODO: ADD DETECTION CODE
 
 
@@ -161,8 +161,8 @@ class Camera:
             A RuntimeError is raised if Gstreamer is not installed.
         """
 
-        if not os.path.exists("./stream"):
-            os.mkdir("./stream")
+        if not os.path.exists(STREAM_DIRECTORY):
+            os.mkdir(STREAM_DIRECTORY)
 
         if not stream_name:
             stream_name = self.name
@@ -218,9 +218,9 @@ class Camera:
         stream_args = [
             "!",
             "hlssink",
-            f"playlist-root=http://{LOCAL_IP_ADDRESS}:8080/stream",
-            f"playlist-location=./stream/{stream_name}-stream.m3u8",
-            f"location=./stream/{stream_name}-segment.%05d.ts",
+            f"playlist-root=http://{LOCAL_IP_ADDRESS}:8080/{''.join(STREAM_DIRECTORY.split('/')[1:])}",
+            f"playlist-location={STREAM_DIRECTORY}/{stream_name}-stream.m3u8",
+            f"location={STREAM_DIRECTORY}/{stream_name}-segment.%05d.ts",
             "target-duration=5",
             "max-files=5",
         ]
@@ -353,82 +353,183 @@ class Camera:
         """
         Define the equals operator for Camera objects.
         """
-        return self.name == other.name and self.source == other.source
+        return self.name == other.name
 
 
 class CameraHub:
     """
-    doc
+    An API for the collection of cameras being used by OpenSec.
+    With this API you can add/remove/retrieve individual cameras, start
+    live streaming the cameras across the local network, and start
+    detecting intruders.
+
+    Public Attributes
+    ----------
+    num_cameras: int
+        The number of cameras in the CameraHub object
+
+    detection_status: bool
+        Whether or not detection is turned on
     """
 
     def __init__(self):
-        self.cameras = []
-        self.detection = False
-        self.camera_streams = []
+        """
+        Init CameraHub class
+        """
+        self.detection_status = False
+
+        self._cameras = []
+        self._camera_streams = []
 
     @property
     def num_cameras(self):
         """
         Return number of cameras
         """
-        return len(self.cameras)
+        return len(self._cameras)
 
     def add_camera(self, camera):
         """
-        doc
+        Adds a camera to the camera hub.
+
+        Parameters
+        ----------
+        camera: Camera object
+            The camera to add to the camera hub
+
+        Raises
+        ----------
+        ValueError:
+            A ValueError is raised when `camera` is not a Camera
+            object, and when `camera` is already in the camera hub
         """
+
+        if isinstance(camera, list):
+            raise ValueError("ERROR: Use `add_cameras` to add a list of cameras.")
 
         if not isinstance(camera, Camera):
             raise ValueError("ERROR: `camera` must be a Camera object.")
 
-        if camera in self.cameras:
-            raise ValueError("ERROR: This camera is already in the camera hub")
+        if camera in self._cameras:
+            raise ValueError("ERROR: This camera is already in the camera hub.")
 
-        self.cameras.append(camera)
+        self._cameras.append(camera)
 
-    def get_camera(self, index):
+    def add_cameras(self, camera_list):
         """
-        doc
+        Similar to `add_camera` but accepts a list of Camera objects.
+
+        Parameters
+        ----------
+        camera_list: list of Camera objects
+            The list of cameras to add to the camera hub.
+
+        Raises
+        ----------
+        ValueError
+            A ValueError is raised if `camera_list` is not a list or
+            if `camera_list` is an empty list.
+
         """
-        if index > self.num_cameras or index < 0:
-            raise ValueError("ERROR: Invalid index.")
+        if not isinstance(camera_list, list):
+            raise ValueError("ERROR: `camera_list` must be a list of Camera objects.")
 
-        return self.cameras[index]
+        if not camera_list:
+            raise ValueError("ERROR: `camera_list` cannot be empty.")
 
-    def remove_camera(self, camera):
+        for camera in camera_list:
+            self.add_camera(camera)
+
+    def get_camera(self, name):
         """
-        Remove a camera using either the camera index or the camera
-        object itself
+        Returns the camera given its name.
+
+        Parameters
+        ----------
+        name: str
+            The name of the camera to retrieve
+
+        Raise
+        ----------
+        ValueError
+            A ValueError is raised if the camera can not be found
         """
 
-        if isinstance(camera, Camera):
-            self.cameras.remove(camera)
-            camera.stop()
+        for camera in self._cameras:
+            if camera.name == name:
+                return camera
 
-        elif isinstance(camera, int):
-            if camera > self.num_cameras or camera < 0:
-                raise ValueError("ERROR: Invalid index.")
+        raise ValueError(f'ERROR: A camera with the name "{name}" could not be found.')
 
-            try:
-                camera = self.cameras.pop(camera)
-            except IndexError as err:
-                raise ValueError("ERROR:Invalid index") from err
+    def remove_camera(self, camera_to_remove):
+        """
+        Remove a camera using either the camera name or the camera
+        object itself.
 
+        Parameters
+        ----------
+        camera_to_remove: str, Camera object
+            Specify which camera to remove by using either the name of the camera
+            or the Camera object itself
+
+        Raises
+        ----------
+        ValueError:
+            A ValueError is raised if the `camera_to_remove` parameter is
+            neither a Camera object or a string
+        """
+
+        if isinstance(camera_to_remove, Camera):
+            self._cameras.remove(camera_to_remove)
+            camera_to_remove.stop()
+
+        elif isinstance(camera_to_remove, str):
+            camera = self.get_camera(camera_to_remove)
+            self._cameras.remove(camera)
             camera.stop()
         else:
             raise ValueError(
-                "ERROR: `camera` parameter must be an integer or camera object"
+                "ERROR: `camera` parameter must be the name of the camera or the camera object."
             )
+
+    def start_camera_streams(self):
+        """
+        Starts streaming each camera's live feed across the network
+        """
+
+        self._camera_streams = [
+            camera.start_camera_stream() for camera in self._cameras
+        ]
+
+    def stop_camera_streams(self):
+        """
+        Stops streaming the camera feed across the network and removes the
+        video segment files from the stream directory.
+        """
+        if not self._camera_streams:
+            print("Camera stream is not running")
+            return
+
+        for stream in self._camera_streams:
+            if stream:
+                stream.kill()
+
+        for file in os.listdir(STREAM_DIRECTORY):
+            os.unlink(f"{STREAM_DIRECTORY}/{file}")
+
+        self._camera_streams = None
 
     def display_cams(self):
         """
-        doc
+        Display the live feed of each camera in a separate window. This method
+        is mainly used for testing purposes.
+
+        Press q to stop displaying the cameras
         """
         while True:
+            frames = [cam.read(reduce_amount=50) for cam in self._cameras]
 
-            frames = [cam.read(reduce_amount=50) for cam in self.cameras]
-
-            for cam, frame in zip(self.cameras, frames):
+            for cam, frame in zip(self._cameras, frames):
                 cv.imshow(cam.name, frame)
 
             key = cv.waitKey(1) & 0xFF
@@ -436,38 +537,15 @@ class CameraHub:
                 break
 
         cv.destroyAllWindows()
-        for cam in self.cameras:
+        for cam in self._cameras:
             cam.stop()
 
-    def start_camera_streams(self):
-        """
-        Starts streaming each camera's live feed across the network
-        """
-
-        self.camera_streams = [camera.start_camera_stream() for camera in self.cameras]
-
-    def stop_camera_streams(self):
-        """
-        doc
-        """
-        if not self.camera_streams:
-            print("Camera stream is not running")
-            return
-
-        for stream in self.camera_streams:
-            if stream:
-                stream.kill()
-
-        for file in os.listdir("./stream"):
-            os.unlink(f"./stream/{file}")
-
-        self.camera_streams = []
-
     def __str__(self):
-        return f"CameraHub(num_cameras={self.num_cameras}, detection={self.detection})"
+        """
+        String representation of a camera hub
+        """
+        return f"CameraHub(num_cameras={self.num_cameras}, detection={self.detection_status})"
 
-
-import requests
 
 if __name__ == "__main__":
 
@@ -482,9 +560,6 @@ if __name__ == "__main__":
     # cam_hub.add_camera(cam_4)
     # cam_hub.start_camera_streams()
     cam_1.start_camera_stream(stream_name="test")
-    time.sleep(10)
-    req = requests.get(f"http://{LOCAL_IP_ADDRESS}:8080/stream/test-stream.m3u8")
-    print(req.status_code)
     input("Press enter to stop camera streaming")
     # cam_hub.stop_camera_streams()
     cam_1.stop_camera_stream()
