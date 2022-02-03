@@ -4,7 +4,7 @@ OpenSec.
 
 The CameraHub class has several methods that act as wrappers around lower-level
 VidGear and OpenCV functions. These methods are responsible for streaming the
-camera feeds to the front end and for object detection.
+camera feeds to the front end and for intruder detection.
 """
 import os
 import shutil
@@ -30,16 +30,18 @@ CAM_DEBUG = True
 HOST_NAME = socket.gethostname()
 LOCAL_IP_ADDRESS = socket.gethostbyname(HOST_NAME)
 
-# TODO: Add support for MJPEG streams
-# TODO: Add error handling to start_camera_stream
 # TODO: ADD DETECTION CODE
+
+# TODO: Add support for MJPEG streams
+# TODO: Add error handling/reconnection to start_camera_stream
 
 
 class Camera:
     """
-    This class provides a high-level API to a wireless IP camera located on the network.
-    With this API you can read frames from the camera and stream the camera feed
-    across the local network.
+    This class provides a high-level API to a wireless IP camera located
+    on the local network.
+    With this API you can read frames from the camera and stream the camera
+    feed across the local network.
 
     Public Attributes
     ----------
@@ -227,6 +229,7 @@ class Camera:
 
         # Assemble the arguments that will be used with GStreamer
         stream_process_args = gstreamer_arg + video_source_args
+
         if re_encode:
             stream_process_args += re_encode_args
 
@@ -384,7 +387,7 @@ class CameraHub:
     @property
     def num_cameras(self):
         """
-        Return number of cameras
+        Returns the number of cameras in the camera hub.
         """
         return len(self._cameras)
 
@@ -447,13 +450,21 @@ class CameraHub:
         Parameters
         ----------
         name: str
-            The name of the camera to retrieve
+            The name of the camera to retrieve.
+
+        Returns
+        ----------
+        camera: Camera object
+            If a camera with the given name is found then it will be returned
 
         Raise
         ----------
         ValueError
-            A ValueError is raised if the camera can not be found
+            A ValueError is raised if the camera can not be found.
         """
+
+        if not isinstance(name, str):
+            raise ValueError("ERROR: `name` must be a string.")
 
         for camera in self._cameras:
             if camera.name == name:
@@ -480,25 +491,69 @@ class CameraHub:
         """
 
         if isinstance(camera_to_remove, Camera):
-            self._cameras.remove(camera_to_remove)
-            camera_to_remove.stop()
+            try:
+                self._cameras.remove(camera_to_remove)
+                camera_to_remove.stop()
+            except ValueError as err:
+                raise ValueError(
+                    f"ERROR: {camera_to_remove} not found in camera hub."
+                ) from err
 
         elif isinstance(camera_to_remove, str):
-            camera = self.get_camera(camera_to_remove)
-            self._cameras.remove(camera)
-            camera.stop()
+            try:
+                camera = self.get_camera(camera_to_remove)
+                self._cameras.remove(camera)
+                camera.stop()
+            except ValueError as err:
+                raise ValueError(
+                    f"ERROR: {camera_to_remove} not found in camera hub."
+                ) from err
+
         else:
             raise ValueError(
                 "ERROR: `camera` parameter must be the name of the camera or the camera object."
             )
 
-    def start_camera_streams(self):
+    def start_camera_streams(
+        self,
+        re_encode=False,
+        scale=None,
+        bitrate=None,
+        logging=False,
+    ):
         """
-        Starts streaming each camera's live feed across the network
+        Starts streaming each camera's live feed across the network.
+
+        Parameters
+        ----------
+        re_encode : bool, optional
+            Choose whether or not to re-encode the camera streams, by default False
+
+        scale : tuple, optional
+            Choose to give a new scale to the streams.
+            If None, a frame with the same size as the source will be
+            returned, by default None
+
+            Warning: If `re_encode` is False then this setting will be ignored.
+
+        bitrate : int, optional
+            Choose a bitrate for the re-encoded streams, by default 512
+
+            Warning: If `re_encode` is False then this setting wil be ignored
+
+        logging : bool, optional
+            Choose to view Gstreamer logs, by default False
         """
 
         self._camera_streams = [
-            camera.start_camera_stream() for camera in self._cameras
+            camera.start_camera_stream(
+                stream_name=None,
+                re_encode=re_encode,
+                scale=scale,
+                bitrate=bitrate,
+                logging=logging,
+            )
+            for camera in self._cameras
         ]
 
     def stop_camera_streams(self):
@@ -513,9 +568,6 @@ class CameraHub:
         for stream in self._camera_streams:
             if stream:
                 stream.kill()
-
-        for file in os.listdir(STREAM_DIRECTORY):
-            os.unlink(f"{STREAM_DIRECTORY}/{file}")
 
         self._camera_streams = None
 
@@ -537,8 +589,6 @@ class CameraHub:
                 break
 
         cv.destroyAllWindows()
-        for cam in self._cameras:
-            cam.stop()
 
     def __str__(self):
         """
