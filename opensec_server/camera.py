@@ -11,6 +11,7 @@ import shutil
 import socket
 import subprocess
 import time
+from threading import Thread
 
 import cv2 as cv
 from dotenv import load_dotenv
@@ -18,11 +19,11 @@ from vidgear.gears import VideoGear
 from vidgear.gears.helper import reducer
 
 # Loading environment variables
-ENV_PATH = "../.env"
 load_dotenv()
 
 TEST_CAM = os.getenv("TEST_CAM")
 STREAM_DIRECTORY = os.getenv("STREAM_DIRECTORY")
+TEST_VID_DIRECTORY = os.getenv("TEST_VID_DIRECTORY")
 
 
 CAM_DEBUG = True
@@ -30,7 +31,6 @@ CAM_DEBUG = True
 HOST_NAME = socket.gethostname()
 LOCAL_IP_ADDRESS = socket.gethostbyname(HOST_NAME)
 
-# TODO: ADD DETECTION CODE
 
 # TODO: Add support for MJPEG streams
 # TODO: Add error handling/reconnection to start_camera_stream
@@ -53,6 +53,9 @@ class Camera:
 
     connected: boolean
         A boolean flag to show whether or not the camera is connected
+
+    fps: int
+        The frame rate of the camera
     """
 
     def __init__(self, name, source, max_reset_attempts=5):
@@ -60,7 +63,7 @@ class Camera:
         Inits Camera objects.
         """
         self.name = name
-        self.source = Camera.validate_source(source)
+        self.source = Camera.validate_source_url(source)
         self.connected = False
 
         self._camera = None
@@ -69,6 +72,18 @@ class Camera:
         self._max_reconnect_attempts = max_reset_attempts
 
         self._connect_to_cam()
+
+    @property
+    def fps(self):
+        """
+        Returns the camera's frame rate
+
+        Returns
+        -------
+        fps: int
+            The frame rate of the connected camera
+        """
+        return self._camera.framerate
 
     def read(self, reduce_amount=None):
         """
@@ -257,7 +272,7 @@ class Camera:
             print("Camera stream is not running")
 
     @staticmethod
-    def validate_source(source):
+    def validate_source_url(source):
         """
         Helper function to check that the source is a valid RTSP URL
 
@@ -383,6 +398,7 @@ class CameraHub:
 
         self._cameras = []
         self._camera_streams = []
+        self._detection_threads = []
 
     @property
     def num_cameras(self):
@@ -590,6 +606,14 @@ class CameraHub:
 
         cv.destroyAllWindows()
 
+    # def start_detection(self):
+    #     self.detection_status = True
+    #     for cam in self._cameras:
+    #         detection_thread = Thread(
+    #             target=cam.detect_intruders, args=(lambda: self.detection_status)
+    #         )
+    #         self._detection_threads.append(detection_thread)
+
     def __str__(self):
         """
         String representation of a camera hub
@@ -598,9 +622,10 @@ class CameraHub:
 
 
 if __name__ == "__main__":
+    pass
+    # cam_hub = CameraHub()
+    # cam_1 = Camera("IP cam 1", TEST_CAM)
 
-    cam_hub = CameraHub()
-    cam_1 = Camera("IP cam 1", TEST_CAM)
     # cam_2 = Camera("IP cam 2", TEST_CAM)
     # cam_3 = Camera("IP cam 3", TEST_CAM)
     # cam_4 = Camera("IP cam 4", TEST_CAM)
@@ -609,7 +634,7 @@ if __name__ == "__main__":
     # cam_hub.add_camera(cam_3)
     # cam_hub.add_camera(cam_4)
     # cam_hub.start_camera_streams()
-    cam_1.start_camera_stream(stream_name="test")
-    input("Press enter to stop camera streaming")
+    # cam_1.start_camera_stream(stream_name="test")
+    # input("Press enter to stop camera streaming")
     # cam_hub.stop_camera_streams()
-    cam_1.stop_camera_stream()
+    # cam_1.stop_camera_stream()

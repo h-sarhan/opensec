@@ -41,11 +41,11 @@ class TestCamera(unittest.TestCase):
     def test_camera_non_valid_sources(self):
         for non_valid_source in self.non_valid_sources:
             with self.assertRaises(ValueError):
-                Camera.validate_source(non_valid_source)
+                Camera.validate_source_url(non_valid_source)
 
     def test_camera_valid_sources(self):
         for valid_source in self.valid_sources:
-            src = Camera.validate_source(valid_source)
+            src = Camera.validate_source_url(valid_source)
             self.assertTrue(src == valid_source or src == f"{valid_source}/")
 
     def test_create_camera(self):

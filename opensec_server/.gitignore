@@ -1,7 +1,7 @@
-stream/
-
-# Untracked folder for experiments
+# Untracked folder for testing and experiments
 other/
+stream/
+test_vids/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
