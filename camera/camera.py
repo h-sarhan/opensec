@@ -8,29 +8,19 @@ camera feeds to the front end and for intruder detection.
 """
 import os
 import shutil
-import socket
 import subprocess
 import time
-from threading import Thread
 
+import config
 import cv2 as cv
-from dotenv import load_dotenv
 from vidgear.gears import VideoGear
 from vidgear.gears.helper import reducer
 
-# Loading environment variables
-load_dotenv()
-
-TEST_CAM = os.getenv("TEST_CAM")
-STREAM_DIRECTORY = os.getenv("STREAM_DIRECTORY")
-TEST_VID_DIRECTORY = os.getenv("TEST_VID_DIRECTORY")
-
-
-CAM_DEBUG = True
-
-HOST_NAME = socket.gethostname()
-LOCAL_IP_ADDRESS = socket.gethostbyname(HOST_NAME)
-
+# TODO: Write function to check status of rtsp stream using below command
+# subprocess.run(
+#     f"ffprobe -v quiet -print_format json -show_streams rtsp://username:pass@192.168.1.156:554",
+#     timeout=5,
+# )
 
 # TODO: Add support for MJPEG streams
 # TODO: Add error handling/reconnection to start_camera_stream
@@ -178,8 +168,8 @@ class Camera:
             A RuntimeError is raised if Gstreamer is not installed.
         """
 
-        if not os.path.exists(STREAM_DIRECTORY):
-            os.mkdir(STREAM_DIRECTORY)
+        if not os.path.exists(config.STREAM_DIRECTORY):
+            os.mkdir(config.STREAM_DIRECTORY)
 
         if not stream_name:
             stream_name = self.name
@@ -235,9 +225,10 @@ class Camera:
         stream_args = [
             "!",
             "hlssink",
-            f"playlist-root=http://{LOCAL_IP_ADDRESS}:8080/{''.join(STREAM_DIRECTORY.split('/')[1:])}",
-            f"playlist-location={STREAM_DIRECTORY}/{stream_name}-stream.m3u8",
-            f"location={STREAM_DIRECTORY}/{stream_name}-segment.%05d.ts",
+            f"playlist-root={config.STREAM_DIRECTORY}",
+            # f"playlist-root={stream_dir}",
+            f"playlist-location={config.STREAM_DIRECTORY}/{stream_name}-stream.m3u8",
+            f"location={config.STREAM_DIRECTORY}/{stream_name}-segment.%05d.ts",
             "target-duration=5",
             "max-files=5",
         ]
@@ -318,7 +309,7 @@ class Camera:
         """
 
         try:
-            camera = VideoGear(source=self.source, logging=CAM_DEBUG).start()
+            camera = VideoGear(source=self.source, logging=config.CAM_DEBUG).start()
             self.connected = True
             self._camera = camera
         except RuntimeError:
@@ -353,7 +344,7 @@ class Camera:
                 self._camera.stop()
 
             try:
-                camera = VideoGear(source=self.source, logging=CAM_DEBUG).start()
+                camera = VideoGear(source=self.source, logging=config.CAM_DEBUG).start()
                 self.connected = True
                 self._camera = camera
             except RuntimeError:
@@ -619,22 +610,3 @@ class CameraHub:
         String representation of a camera hub
         """
         return f"CameraHub(num_cameras={self.num_cameras}, detection={self.detection_status})"
-
-
-if __name__ == "__main__":
-    pass
-    # cam_hub = CameraHub()
-    # cam_1 = Camera("IP cam 1", TEST_CAM)
-
-    # cam_2 = Camera("IP cam 2", TEST_CAM)
-    # cam_3 = Camera("IP cam 3", TEST_CAM)
-    # cam_4 = Camera("IP cam 4", TEST_CAM)
-    # cam_hub.add_camera(cam_1)
-    # cam_hub.add_camera(cam_2)
-    # cam_hub.add_camera(cam_3)
-    # cam_hub.add_camera(cam_4)
-    # cam_hub.start_camera_streams()
-    # cam_1.start_camera_stream(stream_name="test")
-    # input("Press enter to stop camera streaming")
-    # cam_hub.stop_camera_streams()
-    # cam_1.stop_camera_stream()

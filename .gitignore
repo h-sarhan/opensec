@@ -1,7 +1,8 @@
-# Untracked folder for testing and experiments
+# Untracked directories and files for testing and experiments
 other/
 stream/
 test_vids/
+main.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

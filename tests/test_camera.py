@@ -7,19 +7,18 @@ import os
 import time
 import unittest
 
+import config
 import numpy as np
-from camera.camera import STREAM_DIRECTORY, TEST_CAM, Camera, CameraHub
-
-PORT = 8080
+from camera import Camera, CameraHub
 
 
-def clear_stream_directory(stream_directory=STREAM_DIRECTORY):
+def clear_stream_directory():
     """
     Helper function to clear the stream directory
     """
-    if os.path.exists(stream_directory):
-        for file in os.listdir(stream_directory):
-            os.unlink(f"{stream_directory}/{file}")
+    if os.path.exists(config.STREAM_DIRECTORY):
+        for file in os.listdir(config.STREAM_DIRECTORY):
+            os.unlink(f"{config.STREAM_DIRECTORY}/{file}")
 
 
 class TestCamera(unittest.TestCase):
@@ -33,7 +32,7 @@ class TestCamera(unittest.TestCase):
 
         # Replace the TEST_CAM value with a working camera in your environment
         # if you want to pass the below tests
-        self.working_camera = TEST_CAM
+        self.working_camera = config.TEST_CAM
 
         self.non_working_camera = "rtsp://123.123.123:554"
 
@@ -101,7 +100,7 @@ class TestCamera(unittest.TestCase):
         time.sleep(20)
 
         # Check that stream files have been generated
-        self.assertTrue(os.path.exists(f"{STREAM_DIRECTORY}/test-stream.m3u8"))
+        self.assertTrue(os.path.exists(f"{config.STREAM_DIRECTORY}/test-stream.m3u8"))
 
         cam.stop()
 
@@ -120,7 +119,7 @@ class TestCameraHub(unittest.TestCase):
     def setUp(self):
         # Replace the TEST_CAM value with a working camera in your environment
         # if you want to pass the tests
-        self.cams = [Camera(f"test_{idx+1}", TEST_CAM) for idx in range(4)]
+        self.cams = [Camera(f"test_{idx+1}", config.TEST_CAM) for idx in range(4)]
 
     def test_add_camera(self):
         cam_hub = CameraHub()
@@ -205,7 +204,7 @@ class TestCameraHub(unittest.TestCase):
         # Check that stream files have been generated
         for cam in self.cams:
             self.assertTrue(
-                os.path.exists(f"{STREAM_DIRECTORY}/{cam.name}-stream.m3u8")
+                os.path.exists(f"{config.STREAM_DIRECTORY}/{cam.name}-stream.m3u8")
             )
 
         cam_hub.stop_camera_streams()

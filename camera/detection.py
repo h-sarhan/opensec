@@ -1,45 +1,78 @@
+"""
+TODO
+"""
 import os
-import time
 from enum import Enum
 from threading import Thread
 
+import config
 import cv2 as cv
-from dotenv import load_dotenv
+from vidgear.gears.helper import reducer
 
-import camera
-
-load_dotenv()
-
-TEST_VID_DIRECTORY = os.getenv("TEST_VID_DIRECTORY")
+from .camera import Camera
 
 
 class SourceType(Enum):
-    VIDEO = 1
-    CAM = 2
+    """
+    TODO
+    """
+
+    VIDEO_DIR = 1
+    CAM_HUB = 2
 
 
 class VideoBuffer:
+    """
+    TODO
+    """
+
     def __init__(self, buffer_len):
+        """
+        TODO
+        """
         pass
 
     def add_frame(self, frame):
+        """
+        TODO
+        """
         pass
 
     def write_to_video(self):
+        """
+        TODO
+        """
         pass
 
     def write_to_gif(self):
+        """
+        TODO
+        """
         pass
 
     def write_thumbnail(self):
+        """
+        TODO
+        """
         pass
 
     def _remove_frame(self):
+        """
+        TODO
+        """
         pass
 
 
+# TODO: CHANGE TO ACCEPT CAMERA HUB INSTEAD OF A SINGLE CAMERA
 class IntruderDetector:
+    """
+    TODO
+    """
+
     def __init__(self, source, video_buffer_len=1800):
+        """
+        TODO
+        """
         self.source_type = None
 
         self._source = self._validate_source(source)
@@ -51,6 +84,9 @@ class IntruderDetector:
         self._detection_thread = None
 
     def start_detection(self, display_cam=False):
+        """
+        TODO
+        """
         self._detection_status = True
         self._detection_thread = Thread(
             target=self._detect_motion, kwargs={"display_cam": display_cam}
@@ -58,11 +94,17 @@ class IntruderDetector:
         self._detection_thread.start()
 
     def stop_detection(self):
+        """
+        TODO
+        """
         self._detection_status = False
         self._detection_thread.join()
         # cv.destroyAllWindows()
 
     def _get_detection_status(self):
+        """
+        TODO
+        """
         return self._detection_status
 
     def _detect_motion(
@@ -72,6 +114,9 @@ class IntruderDetector:
         frame_reduction_amount=50,
         display_cam=False,
     ):
+        """
+        TODO
+        """
 
         # This keeps track of the number of consecutive motion frames
         conseq_motion_frames = 0
@@ -83,7 +128,7 @@ class IntruderDetector:
             # This variable states whether the current frame is a motion frame or not
             is_motion_frame = False
 
-            if self.source_type == SourceType.CAM:
+            if self.source_type == SourceType.CAM_HUB:
                 # Read a frame from the camera
                 orig_frame = self._source.read(reduce_amount=frame_reduction_amount)
             else:
@@ -95,9 +140,7 @@ class IntruderDetector:
                     break
 
                 # Resize the frame to improve performance
-                orig_frame = cv.resize(
-                    orig_frame, (960, 540), interpolation=cv.INTER_AREA
-                )
+                orig_frame = reducer(orig_frame, percentage=frame_reduction_amount)
 
             self._buffer.add_frame(orig_frame)
 
@@ -111,7 +154,7 @@ class IntruderDetector:
             is_motion_frame = self._detect_motion_frame(contours, display_cam, frame)
 
             if display_cam:
-                if self.source_type == SourceType.CAM:
+                if self.source_type == SourceType.CAM_HUB:
                     # Display the camera name on the frame
                     cv.putText(
                         img=frame,
@@ -156,6 +199,9 @@ class IntruderDetector:
         # return motion_frames
 
     def _find_contours(self, frame, bg_subtractor, noise_kernel):
+        """
+        TODO
+        """
         # Update the background model with the current frame using our background subtractor
         fg_mask = bg_subtractor.apply(frame)
 
@@ -176,6 +222,9 @@ class IntruderDetector:
         return contours
 
     def _detect_motion_frame(self, contours, display_cams=None, frame=None):
+        """
+        TODO
+        """
         is_motion_frame = False
 
         # If no contours have been found then this is not a motion frame
@@ -210,27 +259,15 @@ class IntruderDetector:
         return is_motion_frame
 
     def _validate_source(self, source):
-        if isinstance(source, camera.Camera):
-            self.source_type = SourceType.CAM
+        """
+        TODO
+        """
+        if isinstance(source, Camera):
+            self.source_type = SourceType.CAM_HUB
             return source
 
         if isinstance(source, str) and os.path.exists(source):
-            self.source_type = SourceType.VIDEO
+            self.source_type = SourceType.VIDEO_DIR
             return cv.VideoCapture(source)
 
-        raise ValueError(
-            "ERROR: `source` has to be a Camera object or an existing video"
-        )
-
-
-if __name__ == "__main__":
-    test_videos = os.listdir(TEST_VID_DIRECTORY)
-    detectors = []
-    for video in test_videos:
-        detector = IntruderDetector(source=f"{TEST_VID_DIRECTORY}/{video}")
-        detector.start_detection(display_cam=True)
-        detectors.append(detector)
-
-    time.sleep(10)
-    for detector in detectors:
-        detector.stop_detection()
+        raise ValueError("ERROR: `source` has to be a Camera Hub or a video directory")
