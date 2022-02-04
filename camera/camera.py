@@ -17,8 +17,8 @@ import cv2 as cv
 from vidgear.gears import VideoGear
 from vidgear.gears.helper import reducer
 
+# TODO: Complete documentation
 # TODO: Add support for MJPEG streams
-# TODO: Add error handling/reconnection to start_camera_stream
 
 
 class Camera:

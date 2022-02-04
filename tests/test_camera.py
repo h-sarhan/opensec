@@ -104,10 +104,34 @@ class TestCamera(unittest.TestCase):
 
         cam.stop()
 
-    @unittest.skip("Not implemented")
     def test_non_working_camera_stream(self):
-        # TODO: Implement
-        pass
+        cam = Camera("test", config.TEST_CAM)
+
+        cam.start_camera_stream("test")
+        seconds_elapsed = 0
+        exited_after_disconnect = False
+
+        while True:
+            # Wait 1 second
+            time.sleep(1)
+            seconds_elapsed += 1
+
+            # Simulate a disconnection after 15 seconds
+            if seconds_elapsed == 15:
+                cam._stream_process.kill()
+
+            # If more than 15 seconds pass after a disconnect then we are
+            # likely in an infinite loop
+            if seconds_elapsed > 30:
+                break
+
+            # The test passes if the stream process exits within
+            # a reasonable time
+            if not cam.is_streaming():
+                exited_after_disconnect = True
+                break
+
+        self.assertTrue(exited_after_disconnect)
 
     @unittest.skip("Not implemented")
     def test_re_encoding_camera_stream(self):
