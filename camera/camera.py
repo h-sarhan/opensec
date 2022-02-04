@@ -6,6 +6,7 @@ The CameraHub class has several methods that act as wrappers around lower-level
 VidGear and OpenCV functions. These methods are responsible for streaming the
 camera feeds to the front end and for intruder detection.
 """
+import json
 import os
 import shutil
 import subprocess
@@ -15,12 +16,6 @@ import config
 import cv2 as cv
 from vidgear.gears import VideoGear
 from vidgear.gears.helper import reducer
-
-# TODO: Write function to check status of rtsp stream using below command
-# subprocess.run(
-#     f"ffprobe -v quiet -print_format json -show_streams rtsp://username:pass@192.168.1.156:554",
-#     timeout=5,
-# )
 
 # TODO: Add support for MJPEG streams
 # TODO: Add error handling/reconnection to start_camera_stream
@@ -262,6 +257,52 @@ class Camera:
         else:
             print("Camera stream is not running")
 
+    def is_streaming(self):
+        """
+        TODO
+        """
+        if self._stream_process is None:
+            return False
+
+        if self._stream_process.poll() is not None:
+            return False
+
+        return True
+
+    @staticmethod
+    def check_source_alive(source, timeout=5):
+        """
+        TODO
+        """
+        if not shutil.which("ffprobe"):
+            raise RuntimeError("ERROR: Please install ffprobe.")
+
+        result = None
+        try:
+            result = subprocess.run(
+                [
+                    shutil.which("ffprobe"),
+                    "-v",
+                    "quiet",
+                    "-print_format",
+                    "json",
+                    "-show_streams",
+                    source,
+                ],
+                timeout=timeout,
+                check=False,
+                capture_output=True,
+            )
+        except subprocess.TimeoutExpired:
+            return False
+
+        try:
+            json.loads(result.stdout)
+        except json.JSONDecodeError:
+            return False
+
+        return True
+
     @staticmethod
     def validate_source_url(source):
         """
@@ -343,12 +384,16 @@ class Camera:
             if self._camera:
                 self._camera.stop()
 
-            try:
-                camera = VideoGear(source=self.source, logging=config.CAM_DEBUG).start()
-                self.connected = True
-                self._camera = camera
-            except RuntimeError:
-                pass
+            if Camera.check_source_alive(self.source):
+                print("Source alive. Attempting reconnection")
+                try:
+                    camera = VideoGear(
+                        source=self.source, logging=config.CAM_DEBUG
+                    ).start()
+                    self.connected = True
+                    self._camera = camera
+                except RuntimeError:
+                    pass
 
         raise RuntimeError("ERROR: Could not reconnect to camera")
 

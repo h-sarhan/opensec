@@ -5,6 +5,7 @@
     "depay",
     "dotenv",
     "fastdct",
+    "ffprobe",
     "gethostbyname",
     "gstreamer",
     "imencode",
