@@ -1,5 +1,7 @@
 import os
+import time
 from enum import Enum
+from threading import Thread
 
 import cv2 as cv
 from dotenv import load_dotenv
@@ -37,23 +39,38 @@ class VideoBuffer:
 
 
 class IntruderDetector:
-    def __init__(self, source, get_detection_status, video_buffer_len=1800):
+    def __init__(self, source, video_buffer_len=1800):
         self.source_type = None
 
         self._source = self._validate_source(source)
-        self._get_detection_status = get_detection_status
+        self._detection_status = False
         self._bg_subtractor = cv.createBackgroundSubtractorKNN()
         # self.bg_subtractor = cv.createBackgroundSubtractorMOG2()
         self._noise_kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3))
-        # This will be a queue
         self._buffer = VideoBuffer(buffer_len=video_buffer_len)
+        self._detection_thread = None
+
+    def start_detection(self, display_cam=False):
+        self._detection_status = True
+        self._detection_thread = Thread(
+            target=self._detect_motion, kwargs={"display_cam": display_cam}
+        )
+        self._detection_thread.start()
+
+    def stop_detection(self):
+        self._detection_status = False
+        self._detection_thread.join()
+        # cv.destroyAllWindows()
+
+    def _get_detection_status(self):
+        return self._detection_status
 
     def _detect_motion(
         self,
         min_conseq_frames=10,
         max_motion_frames=120,
         frame_reduction_amount=50,
-        display_cams=False,
+        display_cam=False,
     ):
 
         # This keeps track of the number of consecutive motion frames
@@ -62,7 +79,7 @@ class IntruderDetector:
         # This stores the frames of motion to send to the object detector
         motion_frames = []
 
-        while self._get_detection_status():
+        while True:
             # This variable states whether the current frame is a motion frame or not
             is_motion_frame = False
 
@@ -91,9 +108,9 @@ class IntruderDetector:
                 frame, self._bg_subtractor, self._noise_kernel
             )
 
-            is_motion_frame = self._detect_motion_frame(contours, display_cams, frame)
+            is_motion_frame = self._detect_motion_frame(contours, display_cam, frame)
 
-            if display_cams:
+            if display_cam:
                 if self.source_type == SourceType.CAM:
                     # Display the camera name on the frame
                     cv.putText(
@@ -107,7 +124,7 @@ class IntruderDetector:
                     )
 
                 # Show the resized frame with bounding boxes around intruders
-                cv.imshow("Motion Detection", frame)
+                cv.imshow(f"{self._source} Motion Detection", frame)
 
             # Increment or reset conseq_motion_frames if the current frame is a motion frame or not
             if is_motion_frame:
@@ -124,21 +141,19 @@ class IntruderDetector:
                 motion_frames.append(orig_frame)
 
             elif len(motion_frames) >= max_motion_frames:
-                return motion_frames
+                break
+                # return motion_frames
 
-            if self.source_type == SourceType.VIDEO:
-                # Exit loop when video is over or by pressing q
-                if not self._source.isOpened() or cv.waitKey(1) == ord("q"):
-                    break
+            # if self.source_type == SourceType.VIDEO:
+            # Exit loop when video is over or by pressing q
+            if (
+                cv.waitKey(1) == ord("q")
+                or not self._source.isOpened()
+                or not self._get_detection_status()
+            ):
+                break
 
-        if self.source_type == SourceType.VIDEO:
-            self._source.release()
-
-        if display_cams:
-            # Close all windows
-            cv.destroyAllWindows()
-
-        return motion_frames
+        # return motion_frames
 
     def _find_contours(self, frame, bg_subtractor, noise_kernel):
         # Update the background model with the current frame using our background subtractor
@@ -210,8 +225,12 @@ class IntruderDetector:
 
 if __name__ == "__main__":
     test_videos = os.listdir(TEST_VID_DIRECTORY)
+    detectors = []
     for video in test_videos:
-        detector = IntruderDetector(
-            source=f"{TEST_VID_DIRECTORY}/{video}", get_detection_status=lambda: True
-        )
-        detector._detect_motion(display_cams=True)
+        detector = IntruderDetector(source=f"{TEST_VID_DIRECTORY}/{video}")
+        detector.start_detection(display_cam=True)
+        detectors.append(detector)
+
+    time.sleep(10)
+    for detector in detectors:
+        detector.stop_detection()

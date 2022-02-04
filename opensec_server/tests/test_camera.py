@@ -8,8 +8,7 @@ import time
 import unittest
 
 import numpy as np
-
-from camera import STREAM_DIRECTORY, TEST_CAM, Camera, CameraHub
+from camera.camera import STREAM_DIRECTORY, TEST_CAM, Camera, CameraHub
 
 PORT = 8080
 
