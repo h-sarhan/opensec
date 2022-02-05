@@ -2,6 +2,7 @@
 other/
 stream/
 test_vids/
+test_video_output/
 main.py
 
 # Byte-compiled / optimized / DLL files

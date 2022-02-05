@@ -2,11 +2,14 @@
 TODO
 """
 import os
+import random
+from collections import deque
 from enum import Enum
 from threading import Thread
 
-import config
+# import config
 import cv2 as cv
+import imageio
 from vidgear.gears.helper import reducer
 
 from .camera import Camera
@@ -26,44 +29,85 @@ class VideoBuffer:
     TODO
     """
 
-    def __init__(self, buffer_len):
+    def __init__(self, buffer_len=90, fps=30):
         """
         TODO
         """
-        pass
+        self._fps = fps
+        self._buffer = deque(maxlen=int(buffer_len * self._fps))
 
     def add_frame(self, frame):
         """
         TODO
         """
-        pass
+        self._buffer.append(frame)
 
-    def write_to_video(self):
+    def write_to_video(self, video_path):
+        """
+        TODO
+        """
+        video_dims = self._get_input_dimensions()
+        codec = cv.VideoWriter_fourcc(*list("mp4v"))
+        video_writer = cv.VideoWriter(video_path, codec, self._fps, video_dims)
+
+        for frame in self._buffer:
+            video_writer.write(frame)
+        video_writer.release()
+
+    def write_to_gif(self, gif_path):
+        """
+        TODO: Lower GIF size/ improve performance
+        """
+        # We have to convert the openCV frames to rgb so they can
+        # be accepted by the imageio library
+        rgb_frames = []
+        for idx in range(100):
+            rgb_frame = cv.cvtColor(self._buffer[idx], cv.COLOR_BGR2RGB)
+            rgb_frames.append(rgb_frame)
+
+        imageio.mimsave(gif_path, rgb_frames, fps=self._fps)
+
+    def write_thumbnail(self, img_path):
+        """
+        TODO
+        """
+        random_frame = self._buffer[random.randint(0, len(self._buffer) // 3)]
+        cv.imwrite(img_path, random_frame)
+
+    def _get_input_dimensions(self):
+        height, width, _ = self._buffer[0].shape
+        return width, height
+
+    def __len__(self):
+        return len(self._buffer)
+
+    def __str__(self):
+        return f"VideoBuffer(buffer_length={self._buffer.maxlen})"
+
+
+class Intruder:
+    """
+    TODO
+    """
+
+    def __init__(self, frames):
+        """
+        TODO
+        """
+        self.camera_name = None
+        self.time_detected = None
+        self.intruder_type = None
+
+        self._frames = frames
+
+    def analyze(self):
         """
         TODO
         """
         pass
 
-    def write_to_gif(self):
-        """
-        TODO
-        """
-        pass
 
-    def write_thumbnail(self):
-        """
-        TODO
-        """
-        pass
-
-    def _remove_frame(self):
-        """
-        TODO
-        """
-        pass
-
-
-# TODO: CHANGE TO ACCEPT CAMERA HUB INSTEAD OF A SINGLE CAMERA
+# TODO: CHANGE TO ACCEPT CAMERA HUB AND VIDEO DIRECTORY INSTEAD OF A SINGLE CAMERA/VIDEO
 class IntruderDetector:
     """
     TODO
@@ -77,11 +121,17 @@ class IntruderDetector:
 
         self._source = self._validate_source(source)
         self._detection_status = False
+
+        # TODO: Does not need to be an attribute
         self._bg_subtractor = cv.createBackgroundSubtractorKNN()
-        # self.bg_subtractor = cv.createBackgroundSubtractorMOG2()
+        # self._bg_subtractor = cv.createBackgroundSubtractorMOG2()
+
+        # TODO: Does not need to be an attribute
         self._noise_kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3))
+
         self._buffer = VideoBuffer(buffer_len=video_buffer_len)
         self._detection_thread = None
+        self._intruder_queue = None
 
     def start_detection(self, display_cam=False):
         """
@@ -100,6 +150,12 @@ class IntruderDetector:
         self._detection_status = False
         self._detection_thread.join()
         # cv.destroyAllWindows()
+
+    def _analyze_intruders(self):
+        """
+        TODO
+        """
+        pass
 
     def _get_detection_status(self):
         """
@@ -128,6 +184,8 @@ class IntruderDetector:
             # This variable states whether the current frame is a motion frame or not
             is_motion_frame = False
 
+            # TODO: REFACTOR THIS INTO A FUNCTION
+            # TODO: FUNCTION START:
             if self.source_type == SourceType.CAM_HUB:
                 # Read a frame from the camera
                 orig_frame = self._source.read(reduce_amount=frame_reduction_amount)
@@ -143,6 +201,7 @@ class IntruderDetector:
                 orig_frame = reducer(orig_frame, percentage=frame_reduction_amount)
 
             self._buffer.add_frame(orig_frame)
+            # TODO: FUNCTION END
 
             # Keep a copy of the original frame
             frame = orig_frame.copy()
@@ -154,18 +213,6 @@ class IntruderDetector:
             is_motion_frame = self._detect_motion_frame(contours, display_cam, frame)
 
             if display_cam:
-                if self.source_type == SourceType.CAM_HUB:
-                    # Display the camera name on the frame
-                    cv.putText(
-                        img=frame,
-                        text=f"{self._source.name} (Motion Detection)",
-                        org=(50, 50),
-                        fontFace=cv.FONT_HERSHEY_DUPLEX,
-                        fontScale=1,
-                        color=(0, 0, 255),
-                        thickness=1,
-                    )
-
                 # Show the resized frame with bounding boxes around intruders
                 cv.imshow(f"{self._source} Motion Detection", frame)
 

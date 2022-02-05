@@ -19,6 +19,7 @@ from vidgear.gears.helper import reducer
 
 # TODO: Complete documentation
 # TODO: Add support for MJPEG streams
+# TODO: Avoid type checking with isinstance
 
 
 class Camera:

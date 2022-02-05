@@ -13,4 +13,7 @@ PORT = 8080
 
 load_dotenv()
 TEST_CAM = os.getenv("TEST_CAM")
-TEST_VID_DIRECTORY = os.getenv("TEST_VID_DIRECTORY")
+TEST_VID_DIRECTORY = ROOT_DIR.joinpath(os.getenv("TEST_VID_DIRECTORY")).as_posix()
+TEST_VIDEO_OUTPUT_DIRECTORY = ROOT_DIR.joinpath(
+    os.getenv("TEST_VIDEO_OUTPUT_DIRECTORY")
+).as_posix()
