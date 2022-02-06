@@ -1,0 +1,19 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+opencv-contrib-python = "*"
+vidgear = {extras = ["core"], version = "*"}
+imageio = "*"
+numpy = "*"
+python-dotenv = "*"
+
+[dev-packages]
+pytest = "*"
+pylint = "*"
+black = "*"
+
+[requires]
+python_version = "3.9"

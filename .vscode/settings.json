@@ -54,7 +54,6 @@
   "python.terminal.executeInFileDir": true,
   "autoDocstring.docstringFormat": "numpy",
   "autoDocstring.startOnNewLine": true,
-  "python.sortImports.path": "c:\\programdata\\miniconda3\\envs\\opensec\\scripts\\isort.exe",
   "python.testing.pytestArgs": [
     "tests"
   ],

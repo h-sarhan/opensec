@@ -107,6 +107,14 @@ class Intruder:
         pass
 
 
+class DetectionSource:
+    """
+    TODO
+    """
+
+    pass
+
+
 # TODO: CHANGE TO ACCEPT CAMERA HUB AND VIDEO DIRECTORY INSTEAD OF A SINGLE CAMERA/VIDEO
 class IntruderDetector:
     """

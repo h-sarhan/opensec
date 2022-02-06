@@ -54,7 +54,7 @@ class Camera:
 
         self._camera = None
         self._stream_process = None
-        self._reset_attempts = 0
+        self._reconnect_attempts = 0
         self._max_reconnect_attempts = max_reset_attempts
 
         self._connect_to_cam()
@@ -119,7 +119,7 @@ class Camera:
         and stops the camera stream and video capture object.
         """
         self.connected = False
-        self._reset_attempts = 0
+        self._reconnect_attempts = 0
 
         self.stop_camera_stream()
         if self._camera:
@@ -127,6 +127,8 @@ class Camera:
 
         print(f"{self.name} stopped.")
 
+    # TODO: Test alternate implementation:
+    # https://stackoverflow.com/questions/45906482/how-to-stream-opencv-frame-with-django-frame-in-realtime?answertab=active#tab-top
     def start_camera_stream(
         self, stream_name=None, re_encode=False, scale=None, bitrate=None, logging=False
     ):
@@ -221,7 +223,7 @@ class Camera:
         stream_args = [
             "!",
             "hlssink",
-            f"playlist-root={config.STREAM_DIRECTORY}",
+            f"playlist-root=http://{config.LOCAL_IP_ADDRESS}:8080/stream",
             # f"playlist-root={stream_dir}",
             f"playlist-location={config.STREAM_DIRECTORY}/{stream_name}-stream.m3u8",
             f"location={config.STREAM_DIRECTORY}/{stream_name}-segment.%05d.ts",
@@ -276,7 +278,7 @@ class Camera:
         TODO
         """
         if not shutil.which("ffprobe"):
-            raise RuntimeError("ERROR: Please install ffprobe.")
+            raise RuntimeError("ERROR: Please install ffmpeg/ffprobe.")
 
         result = None
         try:
@@ -341,8 +343,6 @@ class Camera:
         """
         Attempts connection to remote camera.
 
-        If connection fails, a reconnection attempt will be made.
-
         Returns
         -------
         VideoGear object
@@ -350,12 +350,14 @@ class Camera:
 
         """
 
+        if not Camera.check_source_alive(self.source):
+            raise RuntimeError("ERROR: Could not connect to camera.")
         try:
             camera = VideoGear(source=self.source, logging=config.CAM_DEBUG).start()
             self.connected = True
             self._camera = camera
-        except RuntimeError:
-            self._reconnect()
+        except RuntimeError as err:
+            raise RuntimeError("ERROR: Could not connect to camera.") from err
 
     def _reconnect(self):
         """
@@ -376,10 +378,10 @@ class Camera:
             A RuntimeError is raised when `self._reset_attempts`
             reaches the maximum value
         """
-        while self._reset_attempts < self._max_reconnect_attempts:
-            print(f"{self.name} reconnection attempt #{self._reset_attempts+1}")
+        while self._reconnect_attempts < self._max_reconnect_attempts:
+            print(f"{self.name} reconnection attempt #{self._reconnect_attempts+1}")
 
-            self._reset_attempts += 1
+            self._reconnect_attempts += 1
             time.sleep(2)
 
             if self._camera:
@@ -393,6 +395,7 @@ class Camera:
                     ).start()
                     self.connected = True
                     self._camera = camera
+                    self._reconnect_attempts = 0
                 except RuntimeError:
                     pass
 
