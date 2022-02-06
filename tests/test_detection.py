@@ -132,8 +132,8 @@ class TestIntruderDetector(unittest.TestCase):
         cam_hub = CameraHub()
         cam_hub.add_cameras([Camera(f"test-{idx+1}", TEST_CAM) for idx in range(4)])
         detector = IntruderDetector(source=cam_hub)
-        frames = detector.read_frames()
-        frames_reduced = detector.read_frames(reduce_amount=50)
+        frames = detector._read_frames()
+        frames_reduced = detector._read_frames(reduce_amount=50)
 
         self.assertEqual(len(frames), 4)
 
@@ -155,8 +155,8 @@ class TestIntruderDetector(unittest.TestCase):
 
     def test_read_frames_from_video_directory(self):
         detector = IntruderDetector(source=TEST_VID_DIRECTORY)
-        frames = detector.read_frames()
-        frames_reduced = detector.read_frames(reduce_amount=50)
+        frames = detector._read_frames()
+        frames_reduced = detector._read_frames(reduce_amount=50)
 
         self.assertEqual(len(frames), len(os.listdir(TEST_VID_DIRECTORY)))
 

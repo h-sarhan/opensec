@@ -8,18 +8,85 @@ camera feeds to the front end and for intruder detection.
 """
 import json
 import os
+import random
 import shutil
 import subprocess
 import time
+from collections import deque
 
 import config
 import cv2 as cv
+import imageio
+
+# import cv2 as cv
 from vidgear.gears import VideoGear
 from vidgear.gears.helper import reducer
 
 # TODO: Complete documentation
-# TODO: Add support for MJPEG streams
 # TODO: Avoid type checking with isinstance
+# TODO: Implement alternative camera stream implementation
+# https://stackoverflow.com/questions/45906482/how-to-stream-opencv-frame-with-django-frame-in-realtime?answertab=active#tab-top
+
+
+class VideoBuffer:
+    """
+    TODO
+    """
+
+    def __init__(self, buffer_len=90, fps=30):
+        """
+        TODO
+        """
+        self._fps = fps
+        self._buffer = deque(maxlen=int(buffer_len * self._fps))
+
+    def add_frame(self, frame):
+        """
+        TODO
+        """
+        self._buffer.append(frame)
+
+    def write_to_video(self, video_path):
+        """
+        TODO
+        """
+        video_dims = self._get_input_dimensions()
+        codec = cv.VideoWriter_fourcc(*list("mp4v"))
+        video_writer = cv.VideoWriter(video_path, codec, self._fps, video_dims)
+
+        for frame in self._buffer:
+            video_writer.write(frame)
+        video_writer.release()
+
+    def write_to_gif(self, gif_path, num_frames=100):
+        """
+        TODO: Lower GIF size/improve performance
+        """
+        # We have to convert the openCV frames to rgb so they can
+        # be accepted by the imageio library
+        rgb_frames = []
+        for idx in range(num_frames):
+            rgb_frame = cv.cvtColor(self._buffer[idx], cv.COLOR_BGR2RGB)
+            rgb_frames.append(rgb_frame)
+
+        imageio.mimsave(gif_path, rgb_frames, fps=self._fps)
+
+    def write_thumbnail(self, img_path):
+        """
+        TODO
+        """
+        random_frame = self._buffer[random.randint(0, len(self._buffer) // 3)]
+        cv.imwrite(img_path, random_frame)
+
+    def _get_input_dimensions(self):
+        height, width, _ = self._buffer[0].shape
+        return width, height
+
+    def __len__(self):
+        return len(self._buffer)
+
+    def __str__(self):
+        return f"VideoBuffer(buffer_length={self._buffer.maxlen})"
 
 
 class Camera:
@@ -121,156 +188,10 @@ class Camera:
         self.connected = False
         self._reconnect_attempts = 0
 
-        self.stop_camera_stream()
         if self._camera:
             self._camera.stop()
 
         print(f"{self.name} stopped.")
-
-    # TODO: Test alternate implementation:
-    # https://stackoverflow.com/questions/45906482/how-to-stream-opencv-frame-with-django-frame-in-realtime?answertab=active#tab-top
-    def start_camera_stream(
-        self, stream_name=None, re_encode=False, scale=None, bitrate=None, logging=False
-    ):
-        """
-        Starts streaming the camera feed to a server and saves the stream process.
-
-
-        Parameters
-        ----------
-        stream_name : str, optional
-            Give a name to the stream, if None the name of the
-            camera will be used, by default None
-
-        re_encode : bool, optional
-            Choose whether or not to re-encode the camera stream, by default False
-
-        scale : tuple, optional
-            Choose to give a new scale to the video.
-            If None, a frame with the same size as the source will be
-            returned, by default None
-
-            Warning: If `re_encode` is False then this setting will be ignored.
-
-        bitrate : int, optional
-            Choose a bitrate for the re-encoded video, by default 512
-
-            Warning: If `re_encode` is False then this setting wil be ignored
-
-        logging : bool, optional
-            Choose to view Gstreamer logs, by default False
-
-        Raises
-        ------
-        RuntimeError
-            A RuntimeError is raised if Gstreamer is not installed.
-        """
-
-        if not os.path.exists(config.STREAM_DIRECTORY):
-            os.mkdir(config.STREAM_DIRECTORY)
-
-        if not stream_name:
-            stream_name = self.name
-
-        if not shutil.which("gst-launch-1.0"):
-            raise RuntimeError("ERROR: Please install the latest version of GStreamer.")
-
-        if not re_encode and (scale or bitrate):
-            print("Warning: The stream is not being re-encoded so the ", end="")
-            if scale:
-                print("`scale` parameter will be ignored.")
-            if bitrate:
-                print("`bitrate` parameter will be ignored.")
-
-        if re_encode:
-            bitrate = 512
-
-        # Path to the gstreamer executable
-        gstreamer_arg = [shutil.which("gst-launch-1.0")]
-
-        # These arguments define the video source
-        video_source_args = [
-            "-v",
-            "rtspsrc",
-            f'location="{self.source}"',
-            "!",
-            "rtph264depay",
-        ]
-
-        # These arguments define the re-encoding arguments
-        re_encode_args = ["!", "avdec_h264", "!", "videoconvert", "!"]
-
-        if scale:
-            width, height = scale
-            re_encode_args += [
-                "videoscale",
-                "!",
-                f"video/x-raw,width={width} height={height}",
-            ]
-
-        re_encode_args += [
-            "!",
-            "x264enc",
-            f"bitrate={bitrate}",
-            "!",
-            'video/x-h264,profile="high"',
-        ]
-
-        # These arguments define what container to use for the stream
-        muxer_args = ["!", "mpegtsmux"]
-
-        # These arguments define HLS stream arguments
-        stream_args = [
-            "!",
-            "hlssink",
-            f"playlist-root=http://{config.LOCAL_IP_ADDRESS}:8080/stream",
-            # f"playlist-root={stream_dir}",
-            f"playlist-location={config.STREAM_DIRECTORY}/{stream_name}-stream.m3u8",
-            f"location={config.STREAM_DIRECTORY}/{stream_name}-segment.%05d.ts",
-            "target-duration=5",
-            "max-files=5",
-        ]
-
-        # Assemble the arguments that will be used with GStreamer
-        stream_process_args = gstreamer_arg + video_source_args
-
-        if re_encode:
-            stream_process_args += re_encode_args
-
-        stream_process_args += muxer_args + stream_args
-
-        if logging:
-            console_output = None
-        else:
-            console_output = subprocess.DEVNULL
-
-        # Create the Gstreamer process
-        self._stream_process = subprocess.Popen(
-            stream_process_args,
-            stdout=console_output,
-            stderr=console_output,
-        )
-
-    def stop_camera_stream(self):
-        """
-        Stops the camera stream process if it is running.
-        """
-        if self._stream_process:
-            self._stream_process.kill()
-        else:
-            print("Camera stream is not running")
-
-    def is_streaming(self):
-        """
-        TODO
-        """
-        if self._stream_process is None:
-            return False
-
-        if self._stream_process.poll() is not None:
-            return False
-
-        return True
 
     @staticmethod
     def check_source_alive(source, timeout=5):
@@ -412,260 +333,3 @@ class Camera:
         Define the equals operator for Camera objects.
         """
         return self.name == other.name
-
-
-class CameraHub:
-    """
-    An API for the collection of cameras being used by OpenSec.
-    With this API you can add/remove/retrieve individual cameras, start
-    live streaming the cameras across the local network, and start
-    detecting intruders.
-
-    Public Attributes
-    ----------
-    num_cameras: int
-        The number of cameras in the CameraHub object
-
-    detection_status: bool
-        Whether or not detection is turned on
-    """
-
-    def __init__(self):
-        """
-        Init CameraHub class
-        """
-        self.detection_status = False
-
-        self._cameras = []
-        self._camera_streams = []
-        self._detection_threads = []
-
-    def read_frames(self, reduce_amount=None):
-        """
-        TODO
-        """
-        frames = []
-        for camera in self._cameras:
-            frames.append(camera.read(reduce_amount=reduce_amount))
-
-        return frames
-
-    @property
-    def num_cameras(self):
-        """
-        Returns the number of cameras in the camera hub.
-        """
-        return len(self._cameras)
-
-    def add_camera(self, camera):
-        """
-        Adds a camera to the camera hub.
-
-        Parameters
-        ----------
-        camera: Camera object
-            The camera to add to the camera hub
-
-        Raises
-        ----------
-        ValueError:
-            A ValueError is raised when `camera` is not a Camera
-            object, and when `camera` is already in the camera hub
-        """
-
-        if isinstance(camera, list):
-            raise ValueError("ERROR: Use `add_cameras` to add a list of cameras.")
-
-        if not isinstance(camera, Camera):
-            raise ValueError("ERROR: `camera` must be a Camera object.")
-
-        if camera in self._cameras:
-            raise ValueError("ERROR: This camera is already in the camera hub.")
-
-        self._cameras.append(camera)
-
-    def add_cameras(self, camera_list):
-        """
-        Similar to `add_camera` but accepts a list of Camera objects.
-
-        Parameters
-        ----------
-        camera_list: list of Camera objects
-            The list of cameras to add to the camera hub.
-
-        Raises
-        ----------
-        ValueError
-            A ValueError is raised if `camera_list` is not a list or
-            if `camera_list` is an empty list.
-
-        """
-        if not isinstance(camera_list, list):
-            raise ValueError("ERROR: `camera_list` must be a list of Camera objects.")
-
-        if not camera_list:
-            raise ValueError("ERROR: `camera_list` cannot be empty.")
-
-        for camera in camera_list:
-            self.add_camera(camera)
-
-    def get_camera(self, name):
-        """
-        Returns the camera given its name.
-
-        Parameters
-        ----------
-        name: str
-            The name of the camera to retrieve.
-
-        Returns
-        ----------
-        camera: Camera object
-            If a camera with the given name is found then it will be returned
-
-        Raise
-        ----------
-        ValueError
-            A ValueError is raised if the camera can not be found.
-        """
-
-        if not isinstance(name, str):
-            raise ValueError("ERROR: `name` must be a string.")
-
-        for camera in self._cameras:
-            if camera.name == name:
-                return camera
-
-        raise ValueError(f'ERROR: A camera with the name "{name}" could not be found.')
-
-    def remove_camera(self, camera_to_remove):
-        """
-        Remove a camera using either the camera name or the camera
-        object itself.
-
-        Parameters
-        ----------
-        camera_to_remove: str, Camera object
-            Specify which camera to remove by using either the name of the camera
-            or the Camera object itself
-
-        Raises
-        ----------
-        ValueError:
-            A ValueError is raised if the `camera_to_remove` parameter is
-            neither a Camera object or a string
-        """
-
-        if isinstance(camera_to_remove, Camera):
-            try:
-                self._cameras.remove(camera_to_remove)
-                camera_to_remove.stop()
-            except ValueError as err:
-                raise ValueError(
-                    f"ERROR: {camera_to_remove} not found in camera hub."
-                ) from err
-
-        elif isinstance(camera_to_remove, str):
-            try:
-                camera = self.get_camera(camera_to_remove)
-                self._cameras.remove(camera)
-                camera.stop()
-            except ValueError as err:
-                raise ValueError(
-                    f"ERROR: {camera_to_remove} not found in camera hub."
-                ) from err
-
-        else:
-            raise ValueError(
-                "ERROR: `camera` parameter must be the name of the camera or the camera object."
-            )
-
-    def start_camera_streams(
-        self,
-        re_encode=False,
-        scale=None,
-        bitrate=None,
-        logging=False,
-    ):
-        """
-        Starts streaming each camera's live feed across the network.
-
-        Parameters
-        ----------
-        re_encode : bool, optional
-            Choose whether or not to re-encode the camera streams, by default False
-
-        scale : tuple, optional
-            Choose to give a new scale to the streams.
-            If None, a frame with the same size as the source will be
-            returned, by default None
-
-            Warning: If `re_encode` is False then this setting will be ignored.
-
-        bitrate : int, optional
-            Choose a bitrate for the re-encoded streams, by default 512
-
-            Warning: If `re_encode` is False then this setting wil be ignored
-
-        logging : bool, optional
-            Choose to view Gstreamer logs, by default False
-        """
-
-        self._camera_streams = [
-            camera.start_camera_stream(
-                stream_name=None,
-                re_encode=re_encode,
-                scale=scale,
-                bitrate=bitrate,
-                logging=logging,
-            )
-            for camera in self._cameras
-        ]
-
-    def stop_camera_streams(self):
-        """
-        Stops streaming the camera feed across the network and removes the
-        video segment files from the stream directory.
-        """
-        if not self._camera_streams:
-            print("Camera stream is not running")
-            return
-
-        for stream in self._camera_streams:
-            if stream:
-                stream.kill()
-
-        self._camera_streams = None
-
-    def display_cams(self):
-        """
-        Display the live feed of each camera in a separate window. This method
-        is mainly used for testing purposes.
-
-        Press q to stop displaying the cameras
-        """
-        while True:
-            frames = [cam.read(reduce_amount=50) for cam in self._cameras]
-
-            for cam, frame in zip(self._cameras, frames):
-                cv.imshow(cam.name, frame)
-
-            key = cv.waitKey(1) & 0xFF
-            if key == ord("q"):
-                break
-
-        cv.destroyAllWindows()
-
-    # def start_detection(self):
-    #     self.detection_status = True
-    #     for cam in self._cameras:
-    #         detection_thread = Thread(
-    #             target=cam.detect_intruders, args=(lambda: self.detection_status)
-    #         )
-    #         self._detection_threads.append(detection_thread)
-
-    def __str__(self):
-        """
-        String representation of a camera hub
-        """
-        return f"CameraHub(num_cameras={self.num_cameras}, detection={self.detection_status})"
