@@ -161,6 +161,31 @@ class TestCameraHub(unittest.TestCase):
         with self.assertRaises(ValueError):
             cam_hub.add_camera(self.cams[1])
 
+    def test_read_frames(self):
+        cam_hub = CameraHub()
+        cam_hub.add_cameras(self.cams)
+
+        frames = cam_hub.read_frames()
+        frames_reduced = cam_hub.read_frames(reduce_amount=50)
+
+        self.assertEqual(len(frames), len(self.cams))
+
+        for frame, frame_reduced in zip(frames, frames_reduced):
+            self.assertIsNotNone(frame)
+            self.assertIsInstance(frame, np.ndarray)
+            self.assertTrue(frame.ndim, 3)
+
+            self.assertIsNotNone(frame_reduced)
+            self.assertIsInstance(frame_reduced, np.ndarray)
+            self.assertTrue(frame_reduced.ndim, 3)
+
+            width_1, height_1, color_channels_1 = frame.shape
+            width_2, height_2, color_channels_2 = frame_reduced.shape
+
+            self.assertLess(width_2, width_1)
+            self.assertLess(height_2, height_1)
+            self.assertEqual(color_channels_1, color_channels_2)
+
     def test_add_cameras(self):
         cam_hub = CameraHub()
 

@@ -4,24 +4,18 @@ TODO
 import os
 import random
 from collections import deque
-from enum import Enum
-from threading import Thread
 
 # import config
 import cv2 as cv
 import imageio
+from vidgear.gears import VideoGear
 from vidgear.gears.helper import reducer
 
-from .camera import Camera
+# from enum import Enum
+# from threading import Thread
 
 
-class SourceType(Enum):
-    """
-    TODO
-    """
-
-    VIDEO_DIR = 1
-    CAM_HUB = 2
+# from .camera import Camera, CameraHub
 
 
 class VideoBuffer:
@@ -54,14 +48,14 @@ class VideoBuffer:
             video_writer.write(frame)
         video_writer.release()
 
-    def write_to_gif(self, gif_path):
+    def write_to_gif(self, gif_path, num_frames=100):
         """
-        TODO: Lower GIF size/ improve performance
+        TODO: Lower GIF size/improve performance
         """
         # We have to convert the openCV frames to rgb so they can
         # be accepted by the imageio library
         rgb_frames = []
-        for idx in range(100):
+        for idx in range(num_frames):
             rgb_frame = cv.cvtColor(self._buffer[idx], cv.COLOR_BGR2RGB)
             rgb_frames.append(rgb_frame)
 
@@ -107,15 +101,6 @@ class Intruder:
         pass
 
 
-class DetectionSource:
-    """
-    TODO
-    """
-
-    pass
-
-
-# TODO: CHANGE TO ACCEPT CAMERA HUB AND VIDEO DIRECTORY INSTEAD OF A SINGLE CAMERA/VIDEO
 class IntruderDetector:
     """
     TODO
@@ -125,9 +110,8 @@ class IntruderDetector:
         """
         TODO
         """
-        self.source_type = None
 
-        self._source = self._validate_source(source)
+        self._source = source
         self._detection_status = False
 
         # TODO: Does not need to be an attribute
@@ -140,120 +124,155 @@ class IntruderDetector:
         self._buffer = VideoBuffer(buffer_len=video_buffer_len)
         self._detection_thread = None
         self._intruder_queue = None
+        self._video_captures = []
 
-    def start_detection(self, display_cam=False):
+    def read_frames(self, reduce_amount=None):
         """
         TODO
         """
-        self._detection_status = True
-        self._detection_thread = Thread(
-            target=self._detect_motion, kwargs={"display_cam": display_cam}
-        )
-        self._detection_thread.start()
+        if hasattr(self._source, "read_frames"):
+            return self._source.read_frames(reduce_amount=reduce_amount)
 
-    def stop_detection(self):
-        """
-        TODO
-        """
-        self._detection_status = False
-        self._detection_thread.join()
-        # cv.destroyAllWindows()
+        if not self._video_captures:
+            self._create_video_captures()
 
-    def _analyze_intruders(self):
-        """
-        TODO
-        """
-        pass
+        if reduce_amount:
+            return [
+                reducer(vid_cap.read(), percentage=reduce_amount)
+                for vid_cap in self._video_captures
+            ]
 
-    def _get_detection_status(self):
-        """
-        TODO
-        """
-        return self._detection_status
+        return [vid_cap.read() for vid_cap in self._video_captures]
 
-    def _detect_motion(
-        self,
-        min_conseq_frames=10,
-        max_motion_frames=120,
-        frame_reduction_amount=50,
-        display_cam=False,
-    ):
-        """
-        TODO
-        """
+    def _create_video_captures(self):
+        try:
+            for video in os.listdir(self._source):
+                video_capture = VideoGear(source=f"{self._source}/{video}").start()
+                self._video_captures.append(video_capture)
 
-        # This keeps track of the number of consecutive motion frames
-        conseq_motion_frames = 0
+        except FileNotFoundError as err:
+            raise FileNotFoundError(
+                "ERROR: The directory specified could not be found or is invalid."
+            ) from err
+        except RuntimeError as err:
+            raise RuntimeError(
+                f"ERROR: Could not read video: {video} in provided video directory"
+            ) from err
 
-        # This stores the frames of motion to send to the object detector
-        motion_frames = []
+    # def start_detection(self, display_cam=False):
+    #     """
+    #     TODO
+    #     """
+    #     self._detection_status = True
+    #     self._detection_thread = Thread(
+    #         target=self._detect_motion, kwargs={"display_cam": display_cam}
+    #     )
+    #     self._detection_thread.start()
 
-        while True:
-            # This variable states whether the current frame is a motion frame or not
-            is_motion_frame = False
+    # def stop_detection(self):
+    #     """
+    #     TODO
+    #     """
+    #     self._detection_status = False
+    #     self._detection_thread.join()
+    #     # cv.destroyAllWindows()
 
-            # TODO: REFACTOR THIS INTO A FUNCTION
-            # TODO: FUNCTION START:
-            if self.source_type == SourceType.CAM_HUB:
-                # Read a frame from the camera
-                orig_frame = self._source.read(reduce_amount=frame_reduction_amount)
-            else:
-                # Read frame from video input if one is given
-                ret, orig_frame = self._source.read()
+    # def _analyze_intruders(self):
+    #     """
+    #     TODO
+    #     """
+    #     pass
 
-                # This fixes a bug where OpenCV crashes when the video ends
-                if not ret:
-                    break
+    # def _get_detection_status(self):
+    #     """
+    #     TODO
+    #     """
+    #     return self._detection_status
 
-                # Resize the frame to improve performance
-                orig_frame = reducer(orig_frame, percentage=frame_reduction_amount)
+    # def _detect_motion(
+    #     self,
+    #     min_conseq_frames=10,
+    #     max_motion_frames=120,
+    #     frame_reduction_amount=50,
+    #     display_cam=False,
+    # ):
+    #     """
+    #     TODO
+    #     """
 
-            self._buffer.add_frame(orig_frame)
-            # TODO: FUNCTION END
+    #     # This keeps track of the number of consecutive motion frames
+    #     conseq_motion_frames = 0
 
-            # Keep a copy of the original frame
-            frame = orig_frame.copy()
+    #     # This stores the frames of motion to send to the object detector
+    #     motion_frames = []
 
-            contours = self._find_contours(
-                frame, self._bg_subtractor, self._noise_kernel
-            )
+    #     while True:
+    #         # This variable states whether the current frame is a motion frame or not
+    #         is_motion_frame = False
 
-            is_motion_frame = self._detect_motion_frame(contours, display_cam, frame)
+    #         # TODO: REFACTOR THIS INTO A FUNCTION
+    #         # TODO: FUNCTION START:
+    #         if self.source_type == SourceType.CAM_HUB:
+    #             # Read a frame from the camera
+    #             orig_frame = self._source.read(reduce_amount=frame_reduction_amount)
+    #         else:
+    #             # Read frame from video input if one is given
+    #             ret, orig_frame = self._source.read()
 
-            if display_cam:
-                # Show the resized frame with bounding boxes around intruders
-                cv.imshow(f"{self._source} Motion Detection", frame)
+    #             # This fixes a bug where OpenCV crashes when the video ends
+    #             if not ret:
+    #                 break
 
-            # Increment or reset conseq_motion_frames if the current frame is a motion frame or not
-            if is_motion_frame:
-                conseq_motion_frames += 1
-            else:
-                conseq_motion_frames = 0
+    #             # Resize the frame to improve performance
+    #             orig_frame = reducer(orig_frame, percentage=frame_reduction_amount)
 
-            # Store the current frame if it is a motion frame
-            # and if the number of consecutive motion frames is sufficient
-            if (
-                conseq_motion_frames >= min_conseq_frames
-                and len(motion_frames) < max_motion_frames
-            ):
-                motion_frames.append(orig_frame)
+    #         self._buffer.add_frame(orig_frame)
+    #         # TODO: FUNCTION END
 
-            elif len(motion_frames) >= max_motion_frames:
-                break
-                # return motion_frames
+    #         # Keep a copy of the original frame
+    #         frame = orig_frame.copy()
 
-            # if self.source_type == SourceType.VIDEO:
-            # Exit loop when video is over or by pressing q
-            if (
-                cv.waitKey(1) == ord("q")
-                or not self._source.isOpened()
-                or not self._get_detection_status()
-            ):
-                break
+    #         contours = self._find_contours(
+    #             frame, self._bg_subtractor, self._noise_kernel
+    #         )
 
-        # return motion_frames
+    #         is_motion_frame = self._detect_motion_frame(contours, display_cam, frame)
 
-    def _find_contours(self, frame, bg_subtractor, noise_kernel):
+    #         if display_cam:
+    #             # Show the resized frame with bounding boxes around intruders
+    #             cv.imshow(f"{self._source} Motion Detection", frame)
+
+    #         # Increment or reset conseq_motion_frames if the current frame is a motion frame or not
+    #         if is_motion_frame:
+    #             conseq_motion_frames += 1
+    #         else:
+    #             conseq_motion_frames = 0
+
+    #         # Store the current frame if it is a motion frame
+    #         # and if the number of consecutive motion frames is sufficient
+    #         if (
+    #             conseq_motion_frames >= min_conseq_frames
+    #             and len(motion_frames) < max_motion_frames
+    #         ):
+    #             motion_frames.append(orig_frame)
+
+    #         elif len(motion_frames) >= max_motion_frames:
+    #             break
+    #             # return motion_frames
+
+    #         # if self.source_type == SourceType.VIDEO:
+    #         # Exit loop when video is over or by pressing q
+    #         if (
+    #             cv.waitKey(1) == ord("q")
+    #             or not self._source.isOpened()
+    #             or not self._get_detection_status()
+    #         ):
+    #             break
+
+    #     # return motion_frames
+
+    @staticmethod
+    def _find_contours(frame, bg_subtractor, noise_kernel):
         """
         TODO
         """
@@ -276,7 +295,8 @@ class IntruderDetector:
 
         return contours
 
-    def _detect_motion_frame(self, contours, display_cams=None, frame=None):
+    @staticmethod
+    def _detect_motion_frame(contours, display_cams=None, frame=None):
         """
         TODO
         """
@@ -312,17 +332,3 @@ class IntruderDetector:
                 return is_motion_frame
 
         return is_motion_frame
-
-    def _validate_source(self, source):
-        """
-        TODO
-        """
-        if isinstance(source, Camera):
-            self.source_type = SourceType.CAM_HUB
-            return source
-
-        if isinstance(source, str) and os.path.exists(source):
-            self.source_type = SourceType.VIDEO_DIR
-            return cv.VideoCapture(source)
-
-        raise ValueError("ERROR: `source` has to be a Camera Hub or a video directory")

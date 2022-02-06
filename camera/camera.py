@@ -440,6 +440,16 @@ class CameraHub:
         self._camera_streams = []
         self._detection_threads = []
 
+    def read_frames(self, reduce_amount=None):
+        """
+        TODO
+        """
+        frames = []
+        for camera in self._cameras:
+            frames.append(camera.read(reduce_amount=reduce_amount))
+
+        return frames
+
     @property
     def num_cameras(self):
         """

@@ -3,8 +3,8 @@ import unittest
 
 import cv2 as cv
 import numpy as np
-from camera import VideoBuffer
-from config import TEST_VID_DIRECTORY, TEST_VIDEO_OUTPUT_DIRECTORY
+from camera import Camera, CameraHub, IntruderDetector, VideoBuffer
+from config import TEST_CAM, TEST_VID_DIRECTORY, TEST_VIDEO_OUTPUT_DIRECTORY
 
 
 # TODO: Refactor VideoBuffer tests and comment if necessary
@@ -128,6 +128,54 @@ class TestBuffer(unittest.TestCase):
 
 
 class TestIntruderDetector(unittest.TestCase):
+    def test_read_frames_from_cam_hub(self):
+        cam_hub = CameraHub()
+        cam_hub.add_cameras([Camera(f"test-{idx+1}", TEST_CAM) for idx in range(4)])
+        detector = IntruderDetector(source=cam_hub)
+        frames = detector.read_frames()
+        frames_reduced = detector.read_frames(reduce_amount=50)
+
+        self.assertEqual(len(frames), 4)
+
+        for frame, frame_reduced in zip(frames, frames_reduced):
+            self.assertIsNotNone(frame)
+            self.assertIsInstance(frame, np.ndarray)
+            self.assertTrue(frame.ndim, 3)
+
+            self.assertIsNotNone(frame_reduced)
+            self.assertIsInstance(frame_reduced, np.ndarray)
+            self.assertTrue(frame_reduced.ndim, 3)
+
+            width_1, height_1, color_channels_1 = frame.shape
+            width_2, height_2, color_channels_2 = frame_reduced.shape
+
+            self.assertLess(width_2, width_1)
+            self.assertLess(height_2, height_1)
+            self.assertEqual(color_channels_1, color_channels_2)
+
+    def test_read_frames_from_video_directory(self):
+        detector = IntruderDetector(source=TEST_VID_DIRECTORY)
+        frames = detector.read_frames()
+        frames_reduced = detector.read_frames(reduce_amount=50)
+
+        self.assertEqual(len(frames), len(os.listdir(TEST_VID_DIRECTORY)))
+
+        for frame, frame_reduced in zip(frames, frames_reduced):
+            self.assertIsNotNone(frame)
+            self.assertIsInstance(frame, np.ndarray)
+            self.assertTrue(frame.ndim, 3)
+
+            self.assertIsNotNone(frame_reduced)
+            self.assertIsInstance(frame_reduced, np.ndarray)
+            self.assertTrue(frame_reduced.ndim, 3)
+
+            width_1, height_1, color_channels_1 = frame.shape
+            width_2, height_2, color_channels_2 = frame_reduced.shape
+
+            self.assertLess(width_2, width_1)
+            self.assertLess(height_2, height_1)
+            self.assertEqual(color_channels_1, color_channels_2)
+
     @unittest.skip("Not implemented")
     def test_something(self):
         pass
