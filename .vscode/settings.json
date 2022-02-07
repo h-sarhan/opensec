@@ -20,6 +20,7 @@
     "IMWRITE",
     "ksvideosrc",
     "MJPEG",
+    "MJPG",
     "mpegtsmux",
     "muxer",
     "ndarray",

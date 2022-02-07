@@ -4,6 +4,7 @@ stream/
 test_vids/
 test_video_output/
 main.py
+inputs.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

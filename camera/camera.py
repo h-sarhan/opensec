@@ -12,6 +12,7 @@ import random
 import shutil
 import subprocess
 import time
+from collections import deque
 from threading import Thread
 
 import config
@@ -35,60 +36,101 @@ class VideoBuffer:
     TODO
     """
 
-    def __init__(self, output_path, video_dims, buffer_len=300, max_buffer_parts=5):
+    def __init__(self, output_directory, part_length=300, max_parts=5):
         """
         TODO
         """
-        self.buffer_len = buffer_len
-        self.output_path = output_path
-        self._buffer = np.empty(
-            shape=(self.buffer_len, *video_dims),
-            dtype=np.uint8,
-        )
-        self._frame_idx = 0
+        self.part_length = part_length
+        self.output_directory = output_directory
+        self.max_parts = max_parts
+        self._part_paths = deque(maxlen=self.max_parts)
+
         self._current_part = 0
-        self._max_buffer_parts = max_buffer_parts
+        self._frame_idx = 0
+        self._current_frame = np.array([])
+        output_params = {"-disable_force_termination": True}
+
+        self._video_writer = WriteGear(
+            f"{self.output_directory}/recordings/parts/part-{str(self._current_part).zfill(3)}.mp4",
+            compression_mode=True,
+            logging=True,
+            **output_params,
+        )
+        self._part_paths.append(
+            f"{self.output_directory}/recordings/parts/part-{str(self._current_part).zfill(3)}.mp4"
+        )
 
     def add_frame(self, frame):
         """
         TODO
         """
-        if self._frame_idx < self.buffer_len:
-            self._buffer[self._frame_idx] = frame
-            self._frame_idx += 1
-            print("add frame")
-        elif (
-            self._frame_idx == self.buffer_len
-            and self._current_part < self._max_buffer_parts
-        ):
-            print("write buffer")
-            self.write_buffer_to_video()
-            self._frame_idx = 0
-            self.clear()
+        if frame is not None:
+            self._current_frame = frame
+            if self._frame_idx < self.part_length:
+                self._video_writer.write(frame)
+                self._frame_idx += 1
+            else:
+                self._create_new_part()
+
+    def _create_new_part(self):
+        self._frame_idx = 0
+        if self._current_part < self.max_parts:
             self._current_part += 1
-
         else:
-            print("merge buffers")
-            self.merge_parts()
             self._current_part = 0
-            self._frame_idx = 0
+        output_params = {"-disable_force_termination": True}
 
-    def write_buffer_to_video(self):
+        self._video_writer.close()
+        self._video_writer = WriteGear(
+            f"{self.output_directory}/recordings/parts/part-{str(self._current_part).zfill(3)}.mp4",
+            compression_mode=True,
+            logging=True,
+            **output_params,
+        )
+        self._part_paths.append(
+            f"{self.output_directory}/recordings/parts/part-{str(self._current_part).zfill(3)}.mp4"
+        )
+
+    def get_last_n_parts(self, num_parts):
         """
         TODO
         """
 
-        video_writer = WriteGear(
-            f"{self.output_path}/recordings/parts/part-0{self._current_part}.mp4",
-            compression_mode=False,
+        if num_parts >= len(self._part_paths):
+            return list(self._part_paths)
+        return list(self._part_paths)[:-num_parts]
+
+    def merge_parts(self, recording_name="recording"):
+        """
+        TODO
+        """
+        if len(self._part_paths) == 1:
+            return
+        parts_to_merge = self.get_last_n_parts(3)
+        with open("inputs.txt", mode="w", encoding="utf8") as f:
+            for part in parts_to_merge:
+                f.write(f"file {part}\n")
+        self._video_writer.close()
+
+        recording_path = f"{self.output_directory}/recordings/{recording_name}.mp4"
+        self._video_writer = WriteGear(output_filename=recording_path)
+        self._video_writer.execute_ffmpeg_cmd(
+            [
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                "inputs.txt",
+                "-c",
+                "copy",
+                recording_path,
+            ]
         )
 
-        for idx, frame in enumerate(self._buffer):
-            if idx >= self._frame_idx:
-                break
-            video_writer.write(frame)
-
-        video_writer.close()
+        self._video_writer.close()
+        # parts = [ffmpeg.input(f"{part_path}") for part_path in parts_to_merge]
+        # ffmpeg.concat(*parts).output(recording_path).overwrite_output().run(quiet=True)
 
     def write_buffer_to_gif(self, num_frames=50, fps=10, skip_frames=4):
         """
@@ -96,54 +138,35 @@ class VideoBuffer:
         """
         # We have to convert the openCV frames to rgb so they can
         # be accepted by the imageio library
-        gif_frames = []
-        end_idx = min(num_frames * skip_frames, self.buffer_len)
-        for idx in range(0, end_idx, skip_frames):
-            rgb_frame = cv.cvtColor(self._buffer[idx], cv.COLOR_BGR2RGB)
-            reduced_frame = reducer(
-                rgb_frame, percentage=70, interpolation=cv.INTER_NEAREST
-            )
-            gif_frames.append(reduced_frame)
+        # gif_frames = []
+        # end_idx = min(num_frames * skip_frames, self.part_length)
+        # for idx in range(0, end_idx, skip_frames):
+        #     rgb_frame = cv.cvtColor(self._buffer[idx], cv.COLOR_BGR2RGB)
+        #     reduced_frame = reducer(
+        #         rgb_frame, percentage=70, interpolation=cv.INTER_NEAREST
+        #     )
+        #     gif_frames.append(reduced_frame)
 
-        imageio.mimsave(
-            f"{self.output_path}/gifs/intruder.gif",
-            gif_frames,
-            fps=fps,
-            subrectangles=True,
-            palettesize=128,
-        )
+        # imageio.mimsave(
+        #     f"{self.output_path}/gifs/intruder.gif",
+        #     gif_frames,
+        #     fps=fps,
+        #     subrectangles=True,
+        #     palettesize=128,
+        # )
 
     def write_thumbnail(self):
         """
         TODO
         """
-        random_frame = self._buffer[random.randint(0, len(self._buffer) // 3)]
-        cv.imwrite(f"{self.output_path}/thumbs/thumbnail.jpg", random_frame)
+        # random_frame = self._buffer[random.randint(0, len(self._buffer) // 3)]
+        # cv.imwrite(f"{self.output_path}/thumbs/thumbnail.jpg", random_frame)
 
-    def merge_parts(self, recording_name="recording"):
+    def stop(self):
         """
         TODO
         """
-        if self._frame_idx < self.buffer_len - 10:
-            self.write_buffer_to_video()
-        recording_path = f"{self.output_path}/recordings/{recording_name}.mp4"
-        parts_path = f"{self.output_path}/recordings/parts"
-        parts = [
-            ffmpeg.input(f"{parts_path}/{part}") for part in os.listdir(parts_path)
-        ]
-        ffmpeg.concat(*parts).output(recording_path).run()
-
-    def clear(self):
-        """
-        TODO
-        """
-        self._buffer = np.empty_like(self._buffer)
-
-    def __len__(self):
-        return self._frame_idx
-
-    def __str__(self):
-        return f"VideoBuffer(buffer_length={self._buffer.shape[0]})"
+        self._video_writer.close()
 
 
 class Camera:
@@ -233,7 +256,7 @@ class Camera:
             from the remote camera. Typically this matrix will have a shape of
             (width, height, number_of_channels).
         """
-        while self.camera_open:
+        while self._get_camera_open():
             # Read a frame from the camera
             frame = self._camera.read()
             if frame is None:
@@ -353,6 +376,12 @@ class Camera:
             self._camera = camera
         except RuntimeError as err:
             raise RuntimeError("ERROR: Could not connect to camera.") from err
+
+    def _get_camera_open(self):
+        """
+        DOC
+        """
+        return self.camera_open
 
     def _reconnect(self):
         """
