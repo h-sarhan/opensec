@@ -1,2 +1,2 @@
 from .camera import Camera, VideoBuffer
-from .detection import Intruder, IntruderDetectionCamera, IntruderDetectionVideoCapture
+from .detection import Intruder, IntruderDetector

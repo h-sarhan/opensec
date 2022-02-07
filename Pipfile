@@ -9,6 +9,7 @@ vidgear = {extras = ["core"], version = "*"}
 imageio = "*"
 numpy = "*"
 python-dotenv = "*"
+ffmpeg-python = "*"
 
 [dev-packages]
 pytest = "*"

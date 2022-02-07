@@ -7,17 +7,19 @@ VidGear and OpenCV functions. These methods are responsible for streaming the
 camera feeds to the front end and for intruder detection.
 """
 import json
+import os
 import random
 import shutil
 import subprocess
 import time
-from collections import deque
 from threading import Thread
 
 import config
 import cv2 as cv
+import ffmpeg
 import imageio
-from vidgear.gears import VideoGear
+import numpy as np
+from vidgear.gears import VideoGear, WriteGear
 from vidgear.gears.helper import reducer
 
 # TODO: Complete documentation
@@ -33,65 +35,115 @@ class VideoBuffer:
     TODO
     """
 
-    def __init__(self, buffer_len=3600):
+    def __init__(self, output_path, video_dims, buffer_len=300, max_buffer_parts=5):
         """
         TODO
         """
-        self._buffer = deque(maxlen=buffer_len)
+        self.buffer_len = buffer_len
+        self.output_path = output_path
+        self._buffer = np.empty(
+            shape=(self.buffer_len, *video_dims),
+            dtype=np.uint8,
+        )
+        self._frame_idx = 0
+        self._current_part = 0
+        self._max_buffer_parts = max_buffer_parts
 
     def add_frame(self, frame):
         """
         TODO
         """
-        self._buffer.append(frame)
+        if self._frame_idx < self.buffer_len:
+            self._buffer[self._frame_idx] = frame
+            self._frame_idx += 1
+            print("add frame")
+        elif (
+            self._frame_idx == self.buffer_len
+            and self._current_part < self._max_buffer_parts
+        ):
+            print("write buffer")
+            self.write_buffer_to_video()
+            self._frame_idx = 0
+            self.clear()
+            self._current_part += 1
 
-    def write_to_video(self, video_path, fps=30):
+        else:
+            print("merge buffers")
+            self.merge_parts()
+            self._current_part = 0
+            self._frame_idx = 0
+
+    def write_buffer_to_video(self):
         """
         TODO
         """
-        video_dims = self._get_input_dimensions()
-        codec = cv.VideoWriter_fourcc(*list("mp4v"))
-        video_writer = cv.VideoWriter(video_path, codec, fps, video_dims)
 
-        for frame in self._buffer:
+        video_writer = WriteGear(
+            f"{self.output_path}/recordings/parts/part-0{self._current_part}.mp4",
+            compression_mode=False,
+        )
+
+        for idx, frame in enumerate(self._buffer):
+            if idx >= self._frame_idx:
+                break
             video_writer.write(frame)
-        video_writer.release()
 
-    def write_to_gif(self, gif_path, num_frames=100, fps=30):
+        video_writer.close()
+
+    def write_buffer_to_gif(self, num_frames=50, fps=10, skip_frames=4):
         """
-        TODO: Lower GIF size/improve performance
+        TODO
         """
         # We have to convert the openCV frames to rgb so they can
         # be accepted by the imageio library
         gif_frames = []
-        for idx in range(num_frames):
+        end_idx = min(num_frames * skip_frames, self.buffer_len)
+        for idx in range(0, end_idx, skip_frames):
             rgb_frame = cv.cvtColor(self._buffer[idx], cv.COLOR_BGR2RGB)
-            gif_frames.append(rgb_frame)
+            reduced_frame = reducer(
+                rgb_frame, percentage=70, interpolation=cv.INTER_NEAREST
+            )
+            gif_frames.append(reduced_frame)
 
-        imageio.mimsave(gif_path, gif_frames, fps=fps)
+        imageio.mimsave(
+            f"{self.output_path}/gifs/intruder.gif",
+            gif_frames,
+            fps=fps,
+            subrectangles=True,
+            palettesize=128,
+        )
 
-    def write_thumbnail(self, img_path):
+    def write_thumbnail(self):
         """
         TODO
         """
         random_frame = self._buffer[random.randint(0, len(self._buffer) // 3)]
-        cv.imwrite(img_path, random_frame)
+        cv.imwrite(f"{self.output_path}/thumbs/thumbnail.jpg", random_frame)
+
+    def merge_parts(self, recording_name="recording"):
+        """
+        TODO
+        """
+        if self._frame_idx < self.buffer_len - 10:
+            self.write_buffer_to_video()
+        recording_path = f"{self.output_path}/recordings/{recording_name}.mp4"
+        parts_path = f"{self.output_path}/recordings/parts"
+        parts = [
+            ffmpeg.input(f"{parts_path}/{part}") for part in os.listdir(parts_path)
+        ]
+        ffmpeg.concat(*parts).output(recording_path).run()
 
     def clear(self):
         """
         TODO
         """
-        self._buffer.clear()
-
-    def _get_input_dimensions(self):
-        height, width, _ = self._buffer[0].shape
-        return width, height
+        self._buffer = np.empty_like(self._buffer)
 
     def __len__(self):
-        return len(self._buffer)
+        return self._frame_idx
 
     def __str__(self):
-        return f"VideoBuffer(buffer_length={self._buffer.maxlen})"
+        return f"VideoBuffer(buffer_length={self._buffer.shape[0]})"
 
 
 class Camera:
