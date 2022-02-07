@@ -7,23 +7,23 @@ VidGear and OpenCV functions. These methods are responsible for streaming the
 camera feeds to the front end and for intruder detection.
 """
 import json
-import os
 import random
 import shutil
 import subprocess
 import time
 from collections import deque
+from threading import Thread
 
 import config
 import cv2 as cv
 import imageio
-
-# import cv2 as cv
 from vidgear.gears import VideoGear
 from vidgear.gears.helper import reducer
 
 # TODO: Complete documentation
 # TODO: Avoid type checking with isinstance
+
+
 # TODO: Implement alternative camera stream implementation
 # https://stackoverflow.com/questions/45906482/how-to-stream-opencv-frame-with-django-frame-in-realtime?answertab=active#tab-top
 
@@ -33,12 +33,11 @@ class VideoBuffer:
     TODO
     """
 
-    def __init__(self, buffer_len=90, fps=30):
+    def __init__(self, buffer_len=3600):
         """
         TODO
         """
-        self._fps = fps
-        self._buffer = deque(maxlen=int(buffer_len * self._fps))
+        self._buffer = deque(maxlen=buffer_len)
 
     def add_frame(self, frame):
         """
@@ -46,30 +45,30 @@ class VideoBuffer:
         """
         self._buffer.append(frame)
 
-    def write_to_video(self, video_path):
+    def write_to_video(self, video_path, fps=30):
         """
         TODO
         """
         video_dims = self._get_input_dimensions()
         codec = cv.VideoWriter_fourcc(*list("mp4v"))
-        video_writer = cv.VideoWriter(video_path, codec, self._fps, video_dims)
+        video_writer = cv.VideoWriter(video_path, codec, fps, video_dims)
 
         for frame in self._buffer:
             video_writer.write(frame)
         video_writer.release()
 
-    def write_to_gif(self, gif_path, num_frames=100):
+    def write_to_gif(self, gif_path, num_frames=100, fps=30):
         """
         TODO: Lower GIF size/improve performance
         """
         # We have to convert the openCV frames to rgb so they can
         # be accepted by the imageio library
-        rgb_frames = []
+        gif_frames = []
         for idx in range(num_frames):
             rgb_frame = cv.cvtColor(self._buffer[idx], cv.COLOR_BGR2RGB)
-            rgb_frames.append(rgb_frame)
+            gif_frames.append(rgb_frame)
 
-        imageio.mimsave(gif_path, rgb_frames, fps=self._fps)
+        imageio.mimsave(gif_path, gif_frames, fps=fps)
 
     def write_thumbnail(self, img_path):
         """
@@ -77,6 +76,12 @@ class VideoBuffer:
         """
         random_frame = self._buffer[random.randint(0, len(self._buffer) // 3)]
         cv.imwrite(img_path, random_frame)
+
+    def clear(self):
+        """
+        TODO
+        """
+        self._buffer.clear()
 
     def _get_input_dimensions(self):
         height, width, _ = self._buffer[0].shape
@@ -118,8 +123,11 @@ class Camera:
         self.name = name
         self.source = Camera.validate_source_url(source)
         self.connected = False
+        self.camera_open = False
 
+        self._current_frame = None
         self._camera = None
+        self._camera_thread = None
         self._stream_process = None
         self._reconnect_attempts = 0
         self._max_reconnect_attempts = max_reset_attempts
@@ -138,7 +146,21 @@ class Camera:
         """
         return self._camera.framerate
 
-    def read(self, reduce_amount=None):
+    def start(self):
+        """
+        TODO
+        """
+        self.camera_open = True
+        self._camera_thread = Thread(target=self._update_frame, daemon=True)
+        self._camera_thread.start()
+
+    def read(self):
+        """
+        TODO
+        """
+        return self._current_frame
+
+    def _update_frame(self):
         """
         Reads a frame from the camera.
 
@@ -159,24 +181,23 @@ class Camera:
             from the remote camera. Typically this matrix will have a shape of
             (width, height, number_of_channels).
         """
+        while self.camera_open:
+            # Read a frame from the camera
+            frame = self._camera.read()
+            if frame is None:
+                self.connected = False
+                # Attempt a reconnection if the frame cannot be read
+                try:
+                    self._reconnect()
+                except RuntimeError:
+                    # Stop the camera if the reconnection attempt failed
+                    print(f"ERROR: Could not connect to {self.name}.")
+                    print("Stopping camera.")
+                    self.stop()
 
-        # Read a frame from the camera
-        frame = self._camera.read()
-        if frame is None:
-            self.connected = False
-            # Attempt a reconnection if the frame cannot be read
-            try:
-                self._reconnect()
-            except RuntimeError:
-                # Stop the camera if the reconnection attempt failed
-                print(f"ERROR: Could not connect to {self.name}.")
-                print("Stopping camera.")
-                self.stop()
-
-        # Return the frame with an optional reduction in size
-        if reduce_amount is None:
-            return frame
-        return reducer(frame, percentage=reduce_amount)
+            # Update frame
+            self._current_frame = frame
+            time.sleep(0.01)
 
     def stop(self):
         """
@@ -187,6 +208,7 @@ class Camera:
         """
         self.connected = False
         self._reconnect_attempts = 0
+        self.camera_open = False
 
         if self._camera:
             self._camera.stop()
