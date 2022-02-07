@@ -1,34 +1,26 @@
 """
 TODO
 """
-# import os
 
-# import config
-import os
-from abc import abstractmethod
+
+from collections import deque
 
 import cv2 as cv
-from vidgear.gears import VideoGear
-
-# from vidgear.gears import VideoGear
 from vidgear.gears.helper import reducer
 
-from .camera import Camera, VideoBuffer
-
-# from enum import Enum
-# from threading import Thread
+from .camera import VideoBuffer
 
 
-class IntruderDetection:
+class IntruderDetector:
     """
     TODO
     """
 
-    def __init__(self, max_motion_frames=100, min_conseq_frames=15, fps=30):
-        self.name = "base"
-        self.buffer = VideoBuffer(fps=fps)
-        self.motion_frames = []
-        self.original_frame = None
+    def __init__(self, name, source, max_motion_frames=100, min_conseq_frames=15):
+        self.name = name
+        self.source = source
+        self.buffer = VideoBuffer(buffer_len=300)
+        self.motion_frames = deque(maxlen=max_motion_frames)
         self.current_frame = None
         self.is_motion_frame = False
 
@@ -37,23 +29,28 @@ class IntruderDetection:
         self._max_motion_frames = max_motion_frames
         self._min_conseq_frames = min_conseq_frames
 
-        # self._bg_subtractor = cv.createBackgroundSubtractorMOG2(
-        #     history=200, detectShadows=False
-        # )
-        self._bg_subtractor = cv.createBackgroundSubtractorKNN(
-            history=200, detectShadows=False
-        )
+        self._bg_subtractor = cv.createBackgroundSubtractorKNN(detectShadows=False)
         self._noise_kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3))
         self._conseq_motion_frames = 0
 
         self._detection_status = False
 
-    @abstractmethod
-    def read(self, reduce_amount=55):
+    def read(self, reduce_amount=None):
         """
         TODO
         """
-        pass
+        frame = self.source.read()
+        if frame is None:
+            self.stop_detection()
+            return
+        if reduce_amount and frame is not None:
+            frame = reducer(
+                frame,
+                percentage=reduce_amount,
+                interpolation=cv.INTER_NEAREST,
+            )
+        self.current_frame = frame
+        # self.buffer.add_frame(self.current_frame)
 
     def get_detection_status(self):
         """
@@ -70,7 +67,7 @@ class IntruderDetection:
         self._fg_mask = cv.morphologyEx(
             self._fg_mask, cv.MORPH_OPEN, self._noise_kernel
         )
-        self._fg_mask = cv.dilate(self._fg_mask, None, iterations=3)
+        self._fg_mask = cv.dilate(self._fg_mask, None, iterations=2)
 
     def find_contours(self):
         """
@@ -115,6 +112,7 @@ class IntruderDetection:
         """
         TODO
         """
+        self.source.start()
         self._detection_status = True
         frame_count = 0
         while self.get_detection_status():
@@ -141,6 +139,7 @@ class IntruderDetection:
 
             if display_frame:
                 # Show the resized frame with bounding boxes around intruders (if any)
+
                 cv.imshow(f"({self.name}) Motion Detection", self.current_frame)
 
             # Increment or reset conseq_motion_frames if the current frame is a motion frame or not
@@ -149,15 +148,9 @@ class IntruderDetection:
             else:
                 self._conseq_motion_frames = 0
 
-            # TODO: DO SOMETHING ELSE WITH THIS
-            # Store the current frame if it is a motion frame
-            # and if the number of consecutive motion frames is sufficient
-            if (
-                self._conseq_motion_frames >= self._min_conseq_frames
-                and len(self.motion_frames) < self._max_motion_frames
-            ):
+            # TODO: DO SOMETHING ELSE WITH HERE
+            if self._conseq_motion_frames >= self._min_conseq_frames:
                 self.motion_frames.append(self.current_frame)
-                print("INTRUDER DETECTED")
 
             frame_count += 1
 
@@ -171,76 +164,22 @@ class IntruderDetection:
         # Close all windows
         cv.destroyAllWindows()
 
+    def log_intruder(self):
+        """
+        TODO
+        """
+
     def record_intruder(self):
         """
         TODO
         """
-        pass
 
     def stop_detection(self):
         """
         TODO
         """
-        self._detection_status = False
-
-
-class IntruderDetectionMultiCamera(IntruderDetection):
-    pass
-
-
-class IntruderDetectionVideoDirectory(IntruderDetection):
-    pass
-
-
-class IntruderDetectionCamera(IntruderDetection):
-    """
-    TODO
-    """
-
-    def __init__(
-        self, name, source, max_motion_frames=100, min_conseq_frames=15, fps=30
-    ):
-        super().__init__(max_motion_frames, min_conseq_frames, fps)
-        self.name = name
-        self.source = source
-
-    def read(self, reduce_amount=None):
-        frame = self.source.read(reduce_amount)
-        if frame is None:
-            self.stop_detection()
-            return
-
-        self.original_frame = frame
-        self.current_frame = self.original_frame.copy()
-        self.buffer.add_frame(self.current_frame)
-
-
-class IntruderDetectionVideoCapture(IntruderDetection):
-    """
-    TODO
-    """
-
-    def __init__(
-        self, name, source, max_motion_frames=100, min_conseq_frames=15, fps=30
-    ):
-        super().__init__(max_motion_frames, min_conseq_frames, fps)
-        self.name = name
-        self.source = VideoGear(source=source).start()
-
-    def read(self, reduce_amount=None):
-        frame = self.source.read()
-        if frame is None:
-            self.stop_detection()
-            return
-        self.original_frame = frame
-        if reduce_amount and self.original_frame is not None:
-            self.original_frame = reducer(self.original_frame, percentage=reduce_amount)
-        self.current_frame = self.original_frame.copy()
-        self.buffer.add_frame(self.current_frame)
-
-    def stop_detection(self):
-        self._detection_status = False
         self.source.stop()
+        self._detection_status = False
 
 
 class Intruder:
