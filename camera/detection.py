@@ -2,61 +2,68 @@
 TODO
 """
 
-
-from collections import deque
-
 import cv2 as cv
 from vidgear.gears.helper import reducer
 
-from .camera import VideoBuffer
+noise_kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3))
 
-
-class IntruderDetector:
+# TODO: Refactor DetectionSource functions return variables rather than store state
+class DetectionSource:
     """
     TODO
     """
 
-    def __init__(self, name, source, max_motion_frames=100, min_conseq_frames=15):
+    def __init__(self, name, source, recordings_path):
         self.name = name
         self.source = source
-        self.buffer = VideoBuffer(buffer_len=300)
-        self.motion_frames = deque(maxlen=max_motion_frames)
+        self.recordings_path = recordings_path
         self.current_frame = None
-        self.is_motion_frame = False
+        self.conseq_motion_frames = 0
+        self.active = False
 
         self._fg_mask = None
         self._contours = []
-        self._max_motion_frames = max_motion_frames
-        self._min_conseq_frames = min_conseq_frames
-
         self._bg_subtractor = cv.createBackgroundSubtractorKNN(detectShadows=False)
-        self._noise_kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3))
-        self._conseq_motion_frames = 0
 
-        self._detection_status = False
+    def start(self):
+        """
+        TODO
+        """
+        self.source.start()
+        self.active = True
 
-    def read(self, reduce_amount=None):
+    def stop(self):
+        """
+        TODO
+        """
+        self.current_frame = None
+        self.conseq_motion_frames = 0
+        self.source.stop()
+        self.active = False
+
+    def is_motion_frame(self):
+        """
+        TODO
+        """
+        # If no contours have been found then this is not a motion frame
+        return self._contours is not None or len(self._contours) == 0
+
+    def update_frame(self, reduce_amount=None):
         """
         TODO
         """
         frame = self.source.read()
         if frame is None:
-            self.stop_detection()
-            return
-        if reduce_amount and frame is not None:
+            self.source.stop()
+            self.current_frame = None
+        elif reduce_amount:
             frame = reducer(
                 frame,
                 percentage=reduce_amount,
                 interpolation=cv.INTER_NEAREST,
             )
-        self.current_frame = frame
-        # self.buffer.add_frame(self.current_frame)
 
-    def get_detection_status(self):
-        """
-        TODO
-        """
-        return self._detection_status
+        self.current_frame = frame
 
     def update_fg_mask(self):
         """
@@ -64,34 +71,32 @@ class IntruderDetector:
         """
         self._fg_mask = self._bg_subtractor.apply(self.current_frame)
 
-        self._fg_mask = cv.morphologyEx(
-            self._fg_mask, cv.MORPH_OPEN, self._noise_kernel
-        )
-        self._fg_mask = cv.dilate(self._fg_mask, None, iterations=2)
+        self._fg_mask = cv.morphologyEx(self._fg_mask, cv.MORPH_OPEN, noise_kernel)
+        self._fg_mask = cv.dilate(self._fg_mask, None, iterations=3)
 
-    def find_contours(self):
+    def find_contours(self, draw_bounding_boxes=False):
         """
         TODO
         """
-        self._contours = cv.findContours(
+        contours = cv.findContours(
             self._fg_mask, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE
         )[0]
+        self._contours = self._filter_contours(contours, draw_bounding_boxes)
 
-    def filter_contours(self, draw_bounding_boxes=False):
+    def _filter_contours(self, contours, draw_bounding_boxes):
         """
         TODO
         """
         filtered_contours = []
         # Loop through the contours if there are any
-        for contour in self._contours:
+        for contour in contours:
             # Remove small instances of detected motion
             # This will mostly be lighting changes
-            if cv.contourArea(contour) < 2000:
+            if cv.contourArea(contour) < 2500:
                 continue
 
             filtered_contours.append(contour)
 
-            # TODO: This could be a function e.g. self.draw_bounding_boxes()
             if draw_bounding_boxes:
                 # Get the bounding rectangle from the contour
                 x_coord, y_coord, width, height = cv.boundingRect(contour)
@@ -104,65 +109,107 @@ class IntruderDetector:
                     (0, 255, 0),
                     1,
                 )
-        self._contours = filtered_contours
+        return filtered_contours
+
+
+class IntruderDetector:
+    """
+    TODO
+    """
+
+    def __init__(
+        self,
+        detection_sources,
+        min_conseq_frames=30,
+        frame_reduction_amount=50,
+        num_frames_to_record=300,
+    ):
+        self.detection_sources = detection_sources
+        self.num_sources = len(self.detection_sources)
+        self.reduce_amount = frame_reduction_amount
+        # self.current_frames = [None for _ in range(self.num_sources)]
+        # self.buffer = VideoBuffer(self.recordings_output_path)
+
+        self._min_conseq_frames = min_conseq_frames
+        self._num_frames_to_record = num_frames_to_record
+
+        self._detection_status = False
+
+    def start_sources(self):
+        """
+        TODO
+        """
+        for source in self.detection_sources:
+            source.start()
+
+    def get_detection_status(self):
+        """
+        TODO
+        """
+        all_sources_inactive = all(
+            not source.active for source in self.detection_sources
+        )
+        if not self._detection_status or all_sources_inactive:
+            return False
+        return True
 
     def start_detection(
-        self, reduce_amount=None, display_frame=False, bg_subtraction_skip_frames=4
+        self, display_frame=False, bg_subtraction_skip_frames=4, skip_frames=False
     ):
         """
         TODO
         """
-        self.source.start()
         self._detection_status = True
+
         frame_count = 0
+        self.start_sources()
+
         while self.get_detection_status():
 
-            # This variable states whether the current frame is a motion frame or not
-            self.is_motion_frame = False
+            for source in self.detection_sources:
+                if skip_frames and frame_count % 2 != 0:
+                    break
 
-            self.read(reduce_amount=reduce_amount)
+                source.update_frame(reduce_amount=self.reduce_amount)
 
-            if self.current_frame is None:
-                break
+                if source.current_frame is None:
+                    if source.active:
+                        source.stop()
+                        if display_frame:
+                            cv.destroyWindow(f"({source.name}) Motion Detection")
+                    continue
 
-            if frame_count % bg_subtraction_skip_frames == 0:
-                self.update_fg_mask()
+                if frame_count % bg_subtraction_skip_frames == 0:
+                    source.update_fg_mask()
 
-            self.find_contours()
-            self.filter_contours(draw_bounding_boxes=display_frame)
+                source.find_contours(draw_bounding_boxes=display_frame)
 
-            # If no contours have been found then this is not a motion frame
-            if not self._contours:
-                self.is_motion_frame = False
-            else:
-                self.is_motion_frame = True
+                if display_frame:
+                    # Show the resized frame with bounding boxes around intruders (if any)
+                    cv.imshow(f"({source.name}) Motion Detection", source.current_frame)
 
-            if display_frame:
-                # Show the resized frame with bounding boxes around intruders (if any)
+                # Increment or reset conseq_motion_frames if the current frame is a motion frame or not
+                if source.is_motion_frame():
+                    source.conseq_motion_frames += 1
+                else:
+                    source.conseq_motion_frames = 0
 
-                cv.imshow(f"({self.name}) Motion Detection", self.current_frame)
-
-            # Increment or reset conseq_motion_frames if the current frame is a motion frame or not
-            if self.is_motion_frame:
-                self._conseq_motion_frames += 1
-            else:
-                self._conseq_motion_frames = 0
-
-            # TODO: DO SOMETHING ELSE WITH HERE
-            if self._conseq_motion_frames >= self._min_conseq_frames:
-                self.motion_frames.append(self.current_frame)
-
-            frame_count += 1
+                if source.conseq_motion_frames >= self._min_conseq_frames:
+                    print(f"intruder detected at {source.name}")
+                    # TODO START RECORDING VIDEO
+                    # source.start_recording()
 
             # Exit loop by pressing q
-            if cv.waitKey(5) == ord("q"):
+            if cv.waitKey(10) == ord("q"):
                 break
 
+            frame_count += 1
         # Release the video object
         self.stop_detection()
 
-        # Close all windows
-        cv.destroyAllWindows()
+        if display_frame:
+            # Close all windows
+            cv.destroyAllWindows()
 
     def log_intruder(self):
         """
@@ -178,7 +225,11 @@ class IntruderDetector:
         """
         TODO
         """
-        self.source.stop()
+        # self.buffer.merge_parts(f"{self.name}-recording")
+        # self.buffer.stop()
+        for source in self.detection_sources:
+            source.stop()
+
         self._detection_status = False
 
 
