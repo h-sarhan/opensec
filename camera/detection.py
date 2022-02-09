@@ -2,25 +2,27 @@
 TODO
 """
 
+
+import time
+
 import cv2 as cv
-from vidgear.gears.helper import reducer
+
+from .camera import VideoRecorder
 
 NOISE_KERNEL = cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3))
 
-# TODO: DOCUMENTATION
-# TODO: WRITE TESTS
-# TODO: INTEGRATE VIDEO RECORDING
 # TODO: INTEGRATE OBJECT DETECTION QUEUE
 # TODO: Implement detect in background method
+# TODO: DOCUMENTATION
+# TODO: WRITE TESTS
 class DetectionSource:
     """
     TODO
     """
 
-    def __init__(self, name, source, recordings_path):
+    def __init__(self, name, source):
         self.name = name
         self.source = source
-        self.recordings_path = recordings_path
         self.conseq_motion_frames = 0
         self.active = False
 
@@ -33,29 +35,26 @@ class DetectionSource:
         """
         self.source.start()
         self.active = True
+        time.sleep(0.2)
 
     def stop(self):
         """
         TODO
         """
-        self.conseq_motion_frames = 0
-        self.source.stop()
-        self.active = False
+        if self.active:
+            self.conseq_motion_frames = 0
+            self.source.stop()
+            self.active = False
 
-    def read(self, reduce_amount=None):
+    # Make this run in the background
+
+    def read(self):
         """
         TODO
         """
         frame = self.source.read()
         if frame is None:
-            self.source.stop()
-        elif reduce_amount:
-            frame = reducer(
-                frame,
-                percentage=reduce_amount,
-                interpolation=cv.INTER_NEAREST,
-            )
-
+            self.stop()
         return frame
 
     def get_foreground_mask(self, frame, frame_count, fg_skip_frames):
@@ -132,17 +131,19 @@ class IntruderDetector:
     def __init__(
         self,
         detection_sources,
-        frame_reduction_amount=50,
+        recording_directory,
         num_frames_to_record=300,
         display_frame=False,
     ):
         self.detection_sources = detection_sources
-        self.reduce_amount = frame_reduction_amount
 
         self._display_frame = display_frame
-        self._num_frames_to_record = num_frames_to_record
+        self._max_frames_to_record = num_frames_to_record
 
         self._detection_status = False
+        self._recorder = VideoRecorder(
+            self.detection_sources, recording_directory, num_frames_to_record
+        )
 
     def start_sources(self):
         """
@@ -166,7 +167,10 @@ class IntruderDetector:
         """
         TODO
         """
-        frame = source.read(reduce_amount=self.reduce_amount)
+        frame = source.read()
+        if frame is None:
+            time.sleep(3)
+            frame = source.read()
 
         if frame is None and source.active:
             source.stop()
@@ -193,8 +197,9 @@ class IntruderDetector:
         else:
             source.conseq_motion_frames = 0
 
+    # remove fg_mask_skip_frames and source_skip_frames arguments
     def detect(
-        self, fg_mask_skip_frames=4, source_skip_frames=False, min_conseq_frames=15
+        self, fg_mask_skip_frames=4, source_skip_frames=False, min_conseq_frames=30
     ):
         """
         TODO
@@ -219,15 +224,16 @@ class IntruderDetector:
                     frame, source, frame_count, fg_mask_skip_frames
                 )
 
-                self.check_for_intruders(source, min_conseq_frames)
+                self.check_for_intruders(frame, source, min_conseq_frames)
 
             frame_count += 1
 
             if source_skip_frames and frame_count % 2 == 1:
+                time.sleep(0.02)
                 continue
 
             # Exit loop by pressing q
-            if cv.waitKey(15) == ord("q"):
+            if cv.waitKey(20) == ord("q"):
                 break
 
         self.stop_detection()
@@ -259,19 +265,23 @@ class IntruderDetector:
         # If no contours have been found then this is not a motion frame
         return contours is not None and len(contours) != 0
 
-    @staticmethod
-    def check_for_intruders(source, min_conseq_frames):
+    def check_for_intruders(self, frame, source, min_conseq_frames):
         """
         TODO
         """
         if source.conseq_motion_frames >= min_conseq_frames:
             print(f"intruder detected at {source.name}")
-            # source.start_recording()
+            self.record_frame(frame, source)
 
-    def record_intruder(self):
+    def record_frame(self, frame, source):
         """
         TODO
         """
+        num_frames_recorded = self._recorder.get_num_frames_recorded(source)
+        if num_frames_recorded <= self._max_frames_to_record:
+            self._recorder.add_frame(frame, source)
+        else:
+            self._save_recordings(source)
 
     def stop_detection(self):
         """
@@ -282,10 +292,14 @@ class IntruderDetector:
 
         self._detection_status = False
 
-    def detect_in_background(self):
-        """
-        TODO
-        """
+        for source in self.detection_sources:
+
+            num_frames_recorded = self._recorder.get_num_frames_recorded(source)
+            if num_frames_recorded <= self._max_frames_to_record:
+                self._save_recordings(source)
+
+    def _save_recordings(self, source):
+        self._recorder.save(source)
 
 
 class Intruder:
