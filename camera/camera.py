@@ -12,161 +12,181 @@ import random
 import shutil
 import subprocess
 import time
-from collections import deque
+from datetime import datetime
 from threading import Thread
 
 import config
 import cv2 as cv
-import ffmpeg
 import imageio
-import numpy as np
 from vidgear.gears import VideoGear, WriteGear
 from vidgear.gears.helper import reducer
 
-# TODO: Complete documentation
 # TODO: Avoid type checking with isinstance
-
+# TODO: DOCUMENTATION
+# TODO: WRITE TESTS
 
 # TODO: Implement alternative camera stream implementation
 # https://stackoverflow.com/questions/45906482/how-to-stream-opencv-frame-with-django-frame-in-realtime?answertab=active#tab-top
 
 
-class VideoBuffer:
+class VideoRecorder:
     """
     TODO
     """
 
-    def __init__(self, output_directory, part_length=300, max_parts=5):
+    def __init__(self, detection_sources, recording_directory, max_stored_frames=150):
+        self.sources = detection_sources
+        self.recordings_directory = recording_directory
+        self.max_stored_frames = max_stored_frames
+
+        self._video_writers = {}
+        self._start_times = {}
+        self._stored_frames = {}
+        self._setup()
+
+    def get_num_frames_recorded(self, source):
         """
         TODO
         """
-        self.part_length = part_length
-        self.output_directory = output_directory
-        self.max_parts = max_parts
-        self._part_paths = deque(maxlen=self.max_parts)
+        return len(self._stored_frames[source.name])
 
-        self._current_part = 0
-        self._frame_idx = 0
-        self._current_frame = np.array([])
-        output_params = {"-disable_force_termination": True}
-
-        self._video_writer = WriteGear(
-            f"{self.output_directory}/recordings/parts/part-{str(self._current_part).zfill(3)}.mp4",
-            compression_mode=True,
-            logging=True,
-            **output_params,
-        )
-        self._part_paths.append(
-            f"{self.output_directory}/recordings/parts/part-{str(self._current_part).zfill(3)}.mp4"
-        )
-
-    def add_frame(self, frame):
+    def add_frame(self, frame, source):
         """
         TODO
         """
+        if self._start_times[source.name] is None:
+            current_date_time = datetime.now().strftime("%Y_%m_%d %Hh %Mm %Ss")
+            self._start_times[source.name] = current_date_time
+
         if frame is not None:
-            self._current_frame = frame
-            if self._frame_idx < self.part_length:
-                self._video_writer.write(frame)
-                self._frame_idx += 1
-            else:
-                self._create_new_part()
+            stored_frames = self._stored_frames[source.name]
+            if len(stored_frames) < self.max_stored_frames:
+                stored_frames.append(frame)
 
-    def _create_new_part(self):
-        self._frame_idx = 0
-        if self._current_part < self.max_parts:
-            self._current_part += 1
-        else:
-            self._current_part = 0
-        output_params = {"-disable_force_termination": True}
+            writer = self._video_writers[source.name]
+            writer.write(frame)
 
-        self._video_writer.close()
-        self._video_writer = WriteGear(
-            f"{self.output_directory}/recordings/parts/part-{str(self._current_part).zfill(3)}.mp4",
-            compression_mode=True,
-            logging=True,
-            **output_params,
-        )
-        self._part_paths.append(
-            f"{self.output_directory}/recordings/parts/part-{str(self._current_part).zfill(3)}.mp4"
+    def save(self, source, gif=True, thumb=True):
+        """
+        TODO
+        """
+        writer = self._video_writers[source.name]
+        writer.close()
+        video_path = self._rename_video(source)
+
+        self._video_writers[source.name] = WriteGear(
+            f"{self.recordings_directory}/videos/{source.name}/intruder.mp4",
+            compression_mode=False,
         )
 
-    def get_last_n_parts(self, num_parts):
+        paths = [video_path]
+        if thumb:
+            thumb_path = self._save_thumb(source)
+            paths.append(thumb_path)
+        if gif:
+            gif_path = self._save_gif(source)
+            paths.append(gif_path)
+
+        self._start_times[source.name] = None
+        self._stored_frames[source.name] = []
+        return paths
+
+    def _rename_video(self, source):
         """
         TODO
         """
+        videos_directory = f"{self.recordings_directory}/videos"
+        base_name = f"{videos_directory}/{source.name}"
+        old_file_path = f"{base_name}/intruder.mp4"
+        new_file_path = f"{base_name}/{self._start_times[source.name]}.mp4"
 
-        if num_parts >= len(self._part_paths):
-            return list(self._part_paths)
-        return list(self._part_paths)[:-num_parts]
+        rename_tries = 0
+        while not os.path.exists(old_file_path):
+            time.sleep(2)
+            rename_tries += 1
+            if rename_tries >= 5:
+                return None
+        os.rename(old_file_path, new_file_path)
+        return new_file_path
 
-    def merge_parts(self, recording_name="recording"):
+    def _save_thumb(self, source):
         """
         TODO
         """
-        if len(self._part_paths) == 1:
-            return
-        parts_to_merge = self.get_last_n_parts(3)
-        with open("inputs.txt", mode="w", encoding="utf8") as f:
-            for part in parts_to_merge:
-                f.write(f"file {part}\n")
-        self._video_writer.close()
+        thumbnails_directory = f"{self.recordings_directory}/thumbnails"
+        base_dir = f"{thumbnails_directory}/{source.name}"
+        thumb_name = self._start_times[source.name]
+        thumb_path = f"{base_dir}/{thumb_name}.jpg"
+        stored_frames = self._stored_frames[source.name]
+        if stored_frames is not None and len(stored_frames) != 0:
+            thumb_frame = random.choice(stored_frames)
+            if thumb_frame is not None:
+                cv.imwrite(thumb_path, thumb_frame)
+                return thumb_path
+        return None
 
-        recording_path = f"{self.output_directory}/recordings/{recording_name}.mp4"
-        self._video_writer = WriteGear(output_filename=recording_path)
-        self._video_writer.execute_ffmpeg_cmd(
-            [
-                "-f",
-                "concat",
-                "-safe",
-                "0",
-                "-i",
-                "inputs.txt",
-                "-c",
-                "copy",
-                recording_path,
-            ]
-        )
-
-        self._video_writer.close()
-        # parts = [ffmpeg.input(f"{part_path}") for part_path in parts_to_merge]
-        # ffmpeg.concat(*parts).output(recording_path).overwrite_output().run(quiet=True)
-
-    def write_buffer_to_gif(self, num_frames=50, fps=10, skip_frames=4):
+    def _save_gif(self, source):
         """
         TODO
         """
-        # We have to convert the openCV frames to rgb so they can
-        # be accepted by the imageio library
-        # gif_frames = []
-        # end_idx = min(num_frames * skip_frames, self.part_length)
-        # for idx in range(0, end_idx, skip_frames):
-        #     rgb_frame = cv.cvtColor(self._buffer[idx], cv.COLOR_BGR2RGB)
-        #     reduced_frame = reducer(
-        #         rgb_frame, percentage=70, interpolation=cv.INTER_NEAREST
-        #     )
-        #     gif_frames.append(reduced_frame)
+        gif_frames = []
+        stored_frames = self._stored_frames[source.name]
+        for frame_idx, frame in enumerate(stored_frames):
+            if frame_idx % 4 != 0:
+                continue
 
-        # imageio.mimsave(
-        #     f"{self.output_path}/gifs/intruder.gif",
-        #     gif_frames,
-        #     fps=fps,
-        #     subrectangles=True,
-        #     palettesize=128,
-        # )
+            rgb_frame = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
+            reduced_frame = reducer(
+                rgb_frame, percentage=40, interpolation=cv.INTER_NEAREST
+            )
+            gif_frames.append(reduced_frame)
 
-    def write_thumbnail(self):
+        gifs_directory = f"{self.recordings_directory}/gifs"
+        base_dir = f"{gifs_directory}/{source.name}"
+        gif_name = self._start_times[source.name]
+        gif_path = f"{base_dir}/{gif_name}.gif"
+        if gif_frames:
+            imageio.mimsave(
+                gif_path, gif_frames, fps=5, subrectangles=True, palettesize=64
+            )
+
+            return gif_path
+
+        return None
+
+    def _setup(self):
         """
         TODO
         """
-        # random_frame = self._buffer[random.randint(0, len(self._buffer) // 3)]
-        # cv.imwrite(f"{self.output_path}/thumbs/thumbnail.jpg", random_frame)
+        self._make_paths()
+        self._make_video_writers()
+        for source in self.sources:
+            self._start_times[source.name] = None
+            self._stored_frames[source.name] = []
 
-    def stop(self):
-        """
-        TODO
-        """
-        self._video_writer.close()
+    def _make_video_writers(self):
+        for source in self.sources:
+            self._video_writers[source.name] = WriteGear(
+                f"{self.recordings_directory}/videos/{source.name}/intruder.mp4",
+                compression_mode=False,
+            )
+
+    def _make_paths(self):
+        if not os.path.exists(self.recordings_directory):
+            os.mkdir(self.recordings_directory)
+
+        directories = [
+            f"{self.recordings_directory}/videos",
+            f"{self.recordings_directory}/thumbnails",
+            f"{self.recordings_directory}/gifs",
+        ]
+        for directory in directories:
+            if not os.path.exists(directory):
+                os.mkdir(directory)
+
+            for source in self.sources:
+                if not os.path.exists(f"{directory}/{source.name}"):
+                    os.mkdir(f"{directory}/{source.name}")
 
 
 class Camera:
@@ -191,7 +211,7 @@ class Camera:
         The frame rate of the camera
     """
 
-    def __init__(self, name, source, max_reset_attempts=5):
+    def __init__(self, name, source, max_reset_attempts=5, reduce_amount=60):
         """
         Inits Camera objects.
         """
@@ -199,11 +219,11 @@ class Camera:
         self.source = Camera.validate_source_url(source)
         self.connected = False
         self.camera_open = False
+        self.reduce_amount = reduce_amount
 
         self._current_frame = None
         self._camera = None
         self._camera_thread = None
-        self._stream_process = None
         self._reconnect_attempts = 0
         self._max_reconnect_attempts = max_reset_attempts
 
@@ -269,10 +289,14 @@ class Camera:
                     print(f"ERROR: Could not connect to {self.name}.")
                     print("Stopping camera.")
                     self.stop()
+            elif self.reduce_amount:
+                frame = reducer(
+                    frame, percentage=self.reduce_amount, interpolation=cv.INTER_NEAREST
+                )
 
             # Update frame
             self._current_frame = frame
-            time.sleep(0.01)
+            time.sleep(0.02)
 
     def stop(self):
         """
@@ -281,12 +305,12 @@ class Camera:
         Sets the reset count to zero, sets the placeholder frame flag to True,
         and stops the camera stream and video capture object.
         """
+        if self._camera and self.camera_open:
+            self._camera.stop()
+
         self.connected = False
         self._reconnect_attempts = 0
         self.camera_open = False
-
-        if self._camera:
-            self._camera.stop()
 
         print(f"{self.name} stopped.")
 
@@ -420,6 +444,7 @@ class Camera:
                     self.connected = True
                     self._camera = camera
                     self._reconnect_attempts = 0
+                    return
                 except RuntimeError:
                     pass
 
