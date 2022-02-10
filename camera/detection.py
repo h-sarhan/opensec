@@ -15,6 +15,8 @@ NOISE_KERNEL = cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3))
 # TODO: Implement detect in background method
 # TODO: DOCUMENTATION
 # TODO: WRITE TESTS
+
+
 class DetectionSource:
     """
     TODO
@@ -26,8 +28,7 @@ class DetectionSource:
         self.conseq_motion_frames = 0
         self.active = False
 
-        self._bg_subtractor = cv.createBackgroundSubtractorKNN(detectShadows=False)
-        self._cached_foreground_mask = None
+        self._bg_subtractor = cv.bgsegm.createBackgroundSubtractorCNT(isParallel=False)
 
     def start(self):
         """
@@ -63,11 +64,7 @@ class DetectionSource:
         denoised_foreground_mask = cv.morphologyEx(
             foreground_mask, cv.MORPH_OPEN, NOISE_KERNEL
         )
-        dilated_foreground_mask = cv.dilate(
-            denoised_foreground_mask, None, iterations=1
-        )
-        self._cached_foreground_mask = dilated_foreground_mask
-        return dilated_foreground_mask
+        return cv.dilate(denoised_foreground_mask, None, iterations=3)
 
     def find_contours(self, foreground_mask, display_frame=None):
         """
@@ -76,16 +73,17 @@ class DetectionSource:
         detection_mode = cv.RETR_EXTERNAL
         detection_method = cv.CHAIN_APPROX_SIMPLE
 
-        contours, _ = cv.findContours(foreground_mask, detection_mode, detection_method)
-        filtered_contours = self._filter_contours(contours, display_frame)
-        return filtered_contours
+        contours = cv.findContours(foreground_mask, detection_mode, detection_method)[0]
 
-    @staticmethod
-    def _filter_contours(contours, display_frame):
+        return self.filter_contours(contours, display_frame)
+
+    def filter_contours(self, contours, display_frame=None):
         """
         TODO
         """
         filtered_contours = []
+
+        # Maybe vectorize this
         # Loop through the contours if there are any
         for contour in contours:
             # Remove small instances of detected motion
@@ -95,7 +93,7 @@ class DetectionSource:
 
             filtered_contours.append(contour)
 
-            # Performance optimization when there is no need to display a frame
+            # # Performance optimization when there is no need to display a frame
             if display_frame is None:
                 break
 
@@ -104,6 +102,9 @@ class DetectionSource:
 
     @staticmethod
     def _draw_bounding_boxes(display_frame, contour):
+        """
+        TODO
+        """
         # Get the bounding rectangle from the contour
         x_coord, y_coord, width, height = cv.boundingRect(contour)
 
@@ -198,9 +199,6 @@ class IntruderDetector:
         while self.get_detection_status():
 
             for source in self.detection_sources:
-                if frame_count % 2 == 1:
-                    time.sleep(0.02)
-                    break
 
                 frame = self.read_frame(source)
 
@@ -211,11 +209,15 @@ class IntruderDetector:
 
                 self.check_for_intruders(frame, source, min_conseq_frames)
 
-            frame_count += 1
-
             # Exit loop by pressing q
             if cv.waitKey(20) == ord("q"):
                 break
+
+            if frame_count % 2 == 1:
+                time.sleep(0.02)
+                continue
+
+            frame_count += 1
 
         self.stop_detection()
 

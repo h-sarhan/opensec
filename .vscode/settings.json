@@ -2,6 +2,7 @@
   "python.formatting.provider": "black",
   "cSpell.words": [
     "avdec",
+    "bgsegm",
     "denoised",
     "depay",
     "deque",
@@ -35,6 +36,7 @@
     "tobytes",
     "uvicorn",
     "vaapiencode",
+    "vectorize",
     "vidgear",
     "vids",
     "yolo",
@@ -61,5 +63,11 @@
   "autoDocstring.startOnNewLine": true,
   "python.testing.pytestArgs": [
     "tests"
+  ],
+  "python.linting.pylintArgs": [
+    "--extension-pkg-whitelist=cv2",
+    "--generated-members=cv.bgsegm.*",
+    "--ignore-patterns=test_.*?py",
+    "--disable=wrong-import-order"
   ],
 }
