@@ -73,11 +73,13 @@ class VideoRecorder:
         writer = self._video_writers[source.name]
         writer.close()
         video_path = self._rename_video(source)
-
-        self._video_writers[source.name] = WriteGear(
-            f"{self.recordings_directory}/videos/{source.name}/intruder.mp4",
-            compression_mode=False,
-        )
+        if source.active:
+            output_params = {"-fourcc": "mp4v", "-fps": 10}
+            self._video_writers[source.name] = WriteGear(
+                f"{self.recordings_directory}/videos/{source.name}/intruder.mp4",
+                compression_mode=False,
+                **output_params,
+            )
 
         paths = [video_path]
         if thumb:
@@ -134,7 +136,6 @@ class VideoRecorder:
         for frame_idx, frame in enumerate(stored_frames):
             if frame_idx % 4 != 0:
                 continue
-
             rgb_frame = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
             reduced_frame = reducer(
                 rgb_frame, percentage=40, interpolation=cv.INTER_NEAREST
@@ -166,9 +167,11 @@ class VideoRecorder:
 
     def _make_video_writers(self):
         for source in self.sources:
+            output_params = {"-fourcc": "mp4v", "-fps": 10}
             self._video_writers[source.name] = WriteGear(
                 f"{self.recordings_directory}/videos/{source.name}/intruder.mp4",
                 compression_mode=False,
+                **output_params,
             )
 
     def _make_paths(self):
@@ -189,7 +192,7 @@ class VideoRecorder:
                     os.mkdir(f"{directory}/{source.name}")
 
 
-class Camera:
+class CameraSource:
     """
     This class provides a high-level API to a wireless IP camera located
     on the local network.
@@ -216,7 +219,7 @@ class Camera:
         Inits Camera objects.
         """
         self.name = name
-        self.source = Camera.validate_source_url(source)
+        self.source = CameraSource.validate_source_url(source)
         self.connected = False
         self.camera_open = False
         self.reduce_amount = reduce_amount
@@ -279,7 +282,7 @@ class Camera:
         while self._get_camera_open():
             # Read a frame from the camera
             frame = self._camera.read()
-            if frame is None:
+            if frame is None and self._get_camera_open():
                 self.connected = False
                 # Attempt a reconnection if the frame cannot be read
                 try:
@@ -289,7 +292,7 @@ class Camera:
                     print(f"ERROR: Could not connect to {self.name}.")
                     print("Stopping camera.")
                     self.stop()
-            elif self.reduce_amount:
+            elif self.reduce_amount and self._get_camera_open():
                 frame = reducer(
                     frame, percentage=self.reduce_amount, interpolation=cv.INTER_NEAREST
                 )
@@ -305,12 +308,12 @@ class Camera:
         Sets the reset count to zero, sets the placeholder frame flag to True,
         and stops the camera stream and video capture object.
         """
-        if self._camera and self.camera_open:
-            self._camera.stop()
-
         self.connected = False
         self._reconnect_attempts = 0
         self.camera_open = False
+
+        if self._camera and self.camera_open:
+            self._camera.stop()
 
         print(f"{self.name} stopped.")
 
@@ -392,7 +395,7 @@ class Camera:
 
         """
 
-        if not Camera.check_source_alive(self.source):
+        if not CameraSource.check_source_alive(self.source):
             raise RuntimeError("ERROR: Could not connect to camera.")
         try:
             camera = VideoGear(source=self.source, logging=config.CAM_DEBUG).start()
@@ -435,7 +438,7 @@ class Camera:
             if self._camera:
                 self._camera.stop()
 
-            if Camera.check_source_alive(self.source):
+            if CameraSource.check_source_alive(self.source):
                 print("Source alive. Attempting reconnection")
                 try:
                     camera = VideoGear(
@@ -461,3 +464,61 @@ class Camera:
         Define the equals operator for Camera objects.
         """
         return self.name == other.name
+
+
+class VideoSource:
+    """
+    TODO
+    """
+
+    def __init__(self, video_path, reduce_amount=60):
+        self.reduce_amount = reduce_amount
+        self._vid_cap = VideoGear(source=video_path)
+        self._vid_cap_thread = None
+        self._vid_cap_open = False
+        self._current_frame = None
+
+    def start(self):
+        """
+        TODO
+        """
+        self._vid_cap.start()
+        self._vid_cap_open = True
+        self._vid_cap_thread = Thread(target=self._update_frame, daemon=True)
+        self._vid_cap_thread.start()
+
+    def read(self):
+        """
+        TODO
+        """
+        return self._current_frame
+
+    def _update_frame(self):
+        while self._get_vid_cap_open():
+            # Read a frame from the camera
+            frame = self._vid_cap.read()
+
+            if self.reduce_amount and frame is not None:
+                frame = reducer(
+                    frame, percentage=self.reduce_amount, interpolation=cv.INTER_NEAREST
+                )
+
+            if frame is None:
+                self._current_frame = None
+                break
+
+            # Update frame
+            self._current_frame = frame
+            time.sleep(0.02)
+
+    def _get_vid_cap_open(self):
+        return self._vid_cap_open
+
+    def stop(self):
+        """
+        TODO
+        """
+        if self._vid_cap and self._vid_cap_open:
+            self._vid_cap.stop()
+
+        self._vid_cap_open = False
