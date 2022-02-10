@@ -35,7 +35,6 @@ class DetectionSource:
         """
         self.source.start()
         self.active = True
-        time.sleep(0.2)
 
     def stop(self):
         """
@@ -46,8 +45,6 @@ class DetectionSource:
             self.source.stop()
             self.active = False
 
-    # Make this run in the background
-
     def read(self):
         """
         TODO
@@ -57,23 +54,20 @@ class DetectionSource:
             self.stop()
         return frame
 
-    def get_foreground_mask(self, frame, frame_count, fg_skip_frames):
+    def get_foreground_mask(self, frame):
         """
         TODO
         """
-        if fg_skip_frames is None or frame_count % fg_skip_frames == 0:
-            foreground_mask = self._bg_subtractor.apply(frame)
+        foreground_mask = self._bg_subtractor.apply(frame)
 
-            denoised_foreground_mask = cv.morphologyEx(
-                foreground_mask, cv.MORPH_OPEN, NOISE_KERNEL
-            )
-            dilated_foreground_mask = cv.dilate(
-                denoised_foreground_mask, None, iterations=1
-            )
-            self._cached_foreground_mask = dilated_foreground_mask
-            return dilated_foreground_mask
-
-        return self._cached_foreground_mask
+        denoised_foreground_mask = cv.morphologyEx(
+            foreground_mask, cv.MORPH_OPEN, NOISE_KERNEL
+        )
+        dilated_foreground_mask = cv.dilate(
+            denoised_foreground_mask, None, iterations=1
+        )
+        self._cached_foreground_mask = dilated_foreground_mask
+        return dilated_foreground_mask
 
     def find_contours(self, foreground_mask, display_frame=None):
         """
@@ -163,19 +157,14 @@ class IntruderDetector:
             return False
         return True
 
-    def read_frame(self, source):
+    def read_frame(self, source: DetectionSource):
         """
         TODO
         """
         frame = source.read()
-        if frame is None:
-            time.sleep(3)
-            frame = source.read()
 
-        if frame is None and source.active:
+        if frame is None:
             source.stop()
-            if self._display_frame:
-                cv.destroyWindow(f"({source.name}) Motion Detection")
 
         return frame
 
@@ -197,10 +186,7 @@ class IntruderDetector:
         else:
             source.conseq_motion_frames = 0
 
-    # remove fg_mask_skip_frames and source_skip_frames arguments
-    def detect(
-        self, fg_mask_skip_frames=4, source_skip_frames=False, min_conseq_frames=30
-    ):
+    def detect(self, min_conseq_frames=15):
         """
         TODO
         """
@@ -212,7 +198,8 @@ class IntruderDetector:
         while self.get_detection_status():
 
             for source in self.detection_sources:
-                if source_skip_frames and frame_count % 2 == 1:
+                if frame_count % 2 == 1:
+                    time.sleep(0.02)
                     break
 
                 frame = self.read_frame(source)
@@ -220,17 +207,11 @@ class IntruderDetector:
                 if frame is None:
                     continue
 
-                self.detect_motion_in_frame(
-                    frame, source, frame_count, fg_mask_skip_frames
-                )
+                self.detect_motion_in_frame(frame, source)
 
                 self.check_for_intruders(frame, source, min_conseq_frames)
 
             frame_count += 1
-
-            if source_skip_frames and frame_count % 2 == 1:
-                time.sleep(0.02)
-                continue
 
             # Exit loop by pressing q
             if cv.waitKey(20) == ord("q"):
@@ -242,20 +223,17 @@ class IntruderDetector:
             # Close all windows
             cv.destroyAllWindows()
 
-    def detect_motion_in_frame(self, frame, source, frame_count, fg_mask_skip_frames):
+    def detect_motion_in_frame(self, frame, source):
         """
         TODO
         """
-        foreground_mask = source.get_foreground_mask(
-            frame, frame_count, fg_mask_skip_frames
-        )
+        foreground_mask = source.get_foreground_mask(frame)
 
         contours = source.find_contours(foreground_mask, display_frame=frame)
 
         self.show_frame(frame, source)
 
-        if frame_count % fg_mask_skip_frames == 0:
-            self.update_conseq_frames(source, contours)
+        self.update_conseq_frames(source, contours)
 
     @staticmethod
     def is_motion_frame(contours):
@@ -295,7 +273,7 @@ class IntruderDetector:
         for source in self.detection_sources:
 
             num_frames_recorded = self._recorder.get_num_frames_recorded(source)
-            if num_frames_recorded <= self._max_frames_to_record:
+            if num_frames_recorded >= 50:
                 self._save_recordings(source)
 
     def _save_recordings(self, source):
