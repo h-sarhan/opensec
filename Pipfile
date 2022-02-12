@@ -5,11 +5,10 @@ name = "pypi"
 
 [packages]
 opencv-contrib-python = "*"
-vidgear = {extras = ["core"], version = "*"}
+vidgear = {extras = ["asyncio"], version = "*"}
 imageio = "*"
 numpy = "*"
 python-dotenv = "*"
-ffmpeg-python = "*"
 
 [dev-packages]
 pytest = "*"

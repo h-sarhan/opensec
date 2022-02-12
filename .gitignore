@@ -3,8 +3,10 @@ other/
 stream/
 test_vids/
 test_video_output/
+yolo/
 main.py
 inputs.txt
+ssd/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

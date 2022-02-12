@@ -20,12 +20,14 @@
     "imshow",
     "IMWRITE",
     "ksvideosrc",
+    "libx",
     "MJPEG",
     "MJPG",
     "mpegtsmux",
     "muxer",
     "ndarray",
     "ndim",
+    "onnx",
     "OPENCV",
     "Popen",
     "RETR",
@@ -36,6 +38,7 @@
     "tobytes",
     "uvicorn",
     "vaapiencode",
+    "vcodec",
     "vectorize",
     "vidgear",
     "vids",
@@ -66,8 +69,8 @@
   ],
   "python.linting.pylintArgs": [
     "--extension-pkg-whitelist=cv2",
-    "--generated-members=cv.bgsegm.*",
-    "--ignore-patterns=test_.*?py",
+    "--generated-members=cv.bgsegm.*, cv.*",
+    "--ignore-patterns=test_.*?py, main.py, object_detection_code.py",
     "--disable=wrong-import-order"
   ],
 }

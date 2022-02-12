@@ -6,10 +6,12 @@ The CameraHub class has several methods that act as wrappers around lower-level
 VidGear and OpenCV functions. These methods are responsible for streaming the
 camera feeds to the front end and for intruder detection.
 """
+import http.server
 import json
 import os
 import random
 import shutil
+import socketserver
 import subprocess
 import time
 from datetime import datetime
@@ -18,15 +20,14 @@ from threading import Thread
 import config
 import cv2 as cv
 import imageio
-from vidgear.gears import VideoGear, WriteGear
+from vidgear.gears import StreamGear, VideoGear, WriteGear
 from vidgear.gears.helper import reducer
 
 # TODO: Avoid type checking with isinstance
 # TODO: DOCUMENTATION
 # TODO: WRITE TESTS
 
-# TODO: Implement alternative camera stream implementation
-# https://stackoverflow.com/questions/45906482/how-to-stream-opencv-frame-with-django-frame-in-realtime?answertab=active#tab-top
+# TODO: Add logging and error handling
 
 
 class VideoRecorder:
@@ -104,10 +105,10 @@ class VideoRecorder:
 
         rename_tries = 0
         while not os.path.exists(old_file_path):
+            if rename_tries == 3:
+                return None
             time.sleep(2)
             rename_tries += 1
-            if rename_tries >= 5:
-                return None
         os.rename(old_file_path, new_file_path)
         return new_file_path
 
@@ -232,25 +233,27 @@ class CameraSource:
 
         self._connect_to_cam()
 
-    @property
-    def fps(self):
-        """
-        Returns the camera's frame rate
+    # @property
+    # def fps(self):
+    #     return self._camera.framerate
 
-        Returns
-        -------
-        fps: int
-            The frame rate of the connected camera
+    @property
+    def is_active(self):
         """
-        return self._camera.framerate
+        TODO
+        """
+        return self.camera_open and self.connected
 
     def start(self):
         """
         TODO
         """
-        self.camera_open = True
-        self._camera_thread = Thread(target=self._update_frame, daemon=True)
-        self._camera_thread.start()
+        if self.camera_open:
+            print(f"Camera {self.name} is already on")
+        else:
+            self.camera_open = True
+            self._camera_thread = Thread(target=self._update_frame)
+            self._camera_thread.start()
 
     def read(self):
         """
@@ -279,7 +282,7 @@ class CameraSource:
             from the remote camera. Typically this matrix will have a shape of
             (width, height, number_of_channels).
         """
-        while self._get_camera_open():
+        while self.is_active:
             # Read a frame from the camera
             frame = self._camera.read()
             if frame is None and self._get_camera_open():
@@ -473,19 +476,27 @@ class VideoSource:
 
     def __init__(self, video_path, reduce_amount=60):
         self.reduce_amount = reduce_amount
+        self.name = video_path.split("/")[-1]
         self._vid_cap = VideoGear(source=video_path)
         self._vid_cap_thread = None
         self._vid_cap_open = False
         self._current_frame = None
 
+    @property
+    def is_active(self):
+        return self._vid_cap_open
+
     def start(self):
         """
         TODO
         """
-        self._vid_cap.start()
-        self._vid_cap_open = True
-        self._vid_cap_thread = Thread(target=self._update_frame, daemon=True)
-        self._vid_cap_thread.start()
+        if self._vid_cap_open:
+            print(f"Video source {self.name} is already on")
+        else:
+            self._vid_cap.start()
+            self._vid_cap_open = True
+            self._vid_cap_thread = Thread(target=self._update_frame)
+            self._vid_cap_thread.start()
 
     def read(self):
         """
@@ -494,7 +505,7 @@ class VideoSource:
         return self._current_frame
 
     def _update_frame(self):
-        while self._get_vid_cap_open():
+        while self.is_active:
             # Read a frame from the camera
             frame = self._vid_cap.read()
 
@@ -522,3 +533,103 @@ class VideoSource:
             self._vid_cap.stop()
 
         self._vid_cap_open = False
+
+
+class LiveFeed:
+    """
+    TODO
+    """
+
+    stream_params = {
+        "-input_framerate": 10,
+        "-livestream": True,
+        "-clear_prev_assets": True,
+        "-seg_duration": 10,
+        "-window_size": 5,
+        "-extra_window_size": 3,
+        "-vcodec": "libx264",
+        "-crf": 27,
+        "-preset": "ultrafast",
+        "-loglevel": "quiet",
+    }
+
+    def __init__(self, sources, stream_directory="stream"):
+        self.sources = sources
+        self.stream_directory = stream_directory
+        self._make_dirs()
+        self.streamers = [
+            StreamGear(
+                output=f"{self.stream_directory}/{source.name}/playlist.m3u8",
+                format="hls",
+                logging=False,
+                **self.stream_params,
+            )
+            for source in self.sources
+        ]
+        self._streaming = False
+        self._server = None
+
+    @property
+    def is_streaming(self):
+        """
+        TODO
+        """
+        all_sources_inactive = all(not source.is_active for source in self.sources)
+        if not self._streaming or all_sources_inactive:
+            return False
+        return True
+
+    def start_streaming_sources(self):
+        """
+        TODO
+        """
+        for source in self.sources:
+            source.start()
+
+        # Give the sources some time to read frames
+        time.sleep(5)
+        while self.is_streaming:
+            for source, streamer in zip(self.sources, self.streamers):
+
+                frame = source.read()
+
+                if frame is None:
+                    continue
+
+                streamer.stream(frame)
+            time.sleep(0.1)
+
+        print("Sources are no longer being streamed")
+
+    def start_server(self):
+        """
+        TODO
+        """
+        Handler = http.server.SimpleHTTPRequestHandler
+        self._server = socketserver.TCPServer(("0.0.0.0", 8000), Handler)
+        print("Streaming server started at port", 8000)
+        self._server.serve_forever()
+
+    def start(self):
+        """
+        TODO
+        """
+        self._streaming = True
+        Thread(target=self.start_streaming_sources).start()
+        Thread(target=self.start_server).start()
+        # self.start_server()
+
+    def stop(self):
+        """
+        TODO
+        """
+        self._streaming = False
+        self._server.shutdown()
+        self._server.server_close()
+        print("Streaming server closed")
+
+    def _make_dirs(self):
+        for source in self.sources:
+            dir_name = f"stream/{source.name}"
+            if not os.path.exists(dir_name):
+                os.mkdir(dir_name)
