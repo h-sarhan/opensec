@@ -4,11 +4,11 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-opencv-contrib-python = "*"
 vidgear = {extras = ["asyncio"], version = "*"}
 imageio = "*"
 numpy = "*"
 python-dotenv = "*"
+opencv-contrib-python = "*"
 
 [dev-packages]
 pytest = "*"
