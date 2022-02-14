@@ -19,9 +19,6 @@ import numpy as np
 import uvicorn
 from vidgear.gears import VideoGear
 from vidgear.gears.asyncio import WebGear_RTC
-from vidgear.gears.helper import create_blank_frame
-
-# TODO: Try to only resize during detection
 
 # TODO: Add logging and error handling
 # TODO: Create BaseSource or Source class
@@ -52,13 +49,12 @@ class CameraSource:
         The frame rate of the camera
     """
 
-    def __init__(self, name, source, max_reset_attempts=5, resize_frame=True):
+    def __init__(self, name, source, max_reset_attempts=5):
         """
         Inits Camera objects.
         """
         self.name = name
         self.source = CameraSource.validate_source_url(source)
-        self.resize_frame = resize_frame
 
         self._current_frame = None
         self._connected = False
@@ -92,10 +88,16 @@ class CameraSource:
             self._camera_thread = Thread(target=self._update_frame)
             self._camera_thread.start()
 
-    def read(self):
+    def read(self, resize=False):
         """
         TODO
         """
+        if resize and self._current_frame is not None:
+            return cv.resize(
+                self._current_frame,
+                (config.RESIZED_FRAME_WIDTH, config.RESIZED_FRAME_HEIGHT),
+                cv.INTER_NEAREST,
+            )
         return self._current_frame
 
     def _update_frame(self):
@@ -132,14 +134,10 @@ class CameraSource:
                     print(f"ERROR: Could not connect to {self.name}.")
                     print("Stopping camera.")
                     self.stop()
-            elif self.resize_frame:
-                frame = cv.resize(
-                    frame, (config.FRAME_WIDTH, config.FRAME_HEIGHT), cv.INTER_NEAREST
-                )
 
             # Update frame
             self._current_frame = frame
-            time.sleep(1 / config.DESIRED_FPS)
+            time.sleep(1 / config.FPS)
 
     def stop(self):
         """
@@ -297,8 +295,7 @@ class VideoSource:
     TODO
     """
 
-    def __init__(self, video_path, resize_frame=True):
-        self.resize_frame = resize_frame
+    def __init__(self, video_path):
         self.name = video_path.split("/")[-1]
         self._vid_cap = VideoGear(source=video_path)
         self._vid_cap_thread = None
@@ -324,10 +321,16 @@ class VideoSource:
             self._vid_cap_thread = Thread(target=self._update_frame)
             self._vid_cap_thread.start()
 
-    def read(self):
+    def read(self, resize=False):
         """
         TODO
         """
+        if resize and self._current_frame is not None:
+            return cv.resize(
+                self._current_frame,
+                (config.RESIZED_FRAME_WIDTH, config.RESIZED_FRAME_HEIGHT),
+                cv.INTER_NEAREST,
+            )
         return self._current_frame
 
     def _update_frame(self):
@@ -336,18 +339,13 @@ class VideoSource:
             # Read a frame from the camera
             frame = self._vid_cap.read()
 
-            if self.resize_frame and frame is not None:
-                frame = cv.resize(
-                    frame, (config.FRAME_WIDTH, config.FRAME_HEIGHT), cv.INTER_NEAREST
-                )
-
             if frame is None:
                 self._current_frame = None
                 break
 
             # Update frame
             self._current_frame = frame
-            time.sleep(1 / config.DESIRED_FPS)
+            time.sleep(1 / config.FPS)
 
     def stop(self):
         """
@@ -368,52 +366,51 @@ class LiveFeedProducer:
     def __init__(self, sources):
         self.sources = sources
         self.running = True
-        self.blank_frame = create_blank_frame(
-            np.empty(
-                shape=(config.FRAME_HEIGHT, config.FRAME_WIDTH, 3), dtype=np.uint8
-            ),
-            text="",
+        self._live_feed_shape = (
+            config.RESIZED_FRAME_HEIGHT * 2,
+            config.RESIZED_FRAME_WIDTH * 2,
+            3,
         )
-        self._live_feed_frame = np.empty(
-            shape=(config.FRAME_HEIGHT * 2, config.FRAME_WIDTH * 2, 3), dtype=np.uint8
+        self._single_frame_shape = (
+            config.RESIZED_FRAME_HEIGHT,
+            config.RESIZED_FRAME_WIDTH,
+            3,
         )
+        self._live_feed_frame = np.zeros(self._live_feed_shape, np.uint8)
+        # TODO: Draw text on blank frame
+        self._blank_frame = np.zeros(self._single_frame_shape, np.uint8)
+        self._frame_count = 0
+        self._current_frame = None
+        Thread(target=self._update_frame).start()
 
-    # @profile
     def read(self):
         """
         TODO
         """
+        return self._current_frame
+
+    def _update_frame(self):
         # TODO: Make this work with a variable number of sources
 
-        if self.running:
+        while self.running:
             frames = []
             for source in self.sources:
-                frame = source.read()
+                frame = source.read(resize=True)
                 if frame is None:
-                    frames.append(self.blank_frame)
+                    print("Frame is none")
+                    frames.append(self._blank_frame)
                 else:
                     frames.append(frame)
 
-            if not isinstance(self.sources[0], CameraSource):
-                frames = [
-                    cv.resize(
-                        frame,
-                        (config.FRAME_WIDTH, config.FRAME_HEIGHT),
-                        interpolation=cv.INTER_NEAREST,
-                    )
-                    for frame in frames
-                ]
-
-            frame_height = config.FRAME_HEIGHT
-            frame_width = config.FRAME_WIDTH
-
+            frame_height, frame_width, _ = self._single_frame_shape
             self._live_feed_frame[:frame_height, :frame_width] = frames[0]
             self._live_feed_frame[:frame_height, frame_width:] = frames[1]
             self._live_feed_frame[frame_height:, :frame_width] = frames[2]
             self._live_feed_frame[frame_height:, frame_width:] = frames[3]
-            return self._live_feed_frame
+            self._current_frame = self._live_feed_frame
+            time.sleep(1 / config.FPS)
 
-        return None
+        self._current_frame = None
 
     def stop(self):
         """
@@ -434,6 +431,7 @@ class LiveFeed:
             "custom_stream": LiveFeedProducer(self.sources),
             "custom_data_location": "./",
             "enable_live_broadcast": True,
+            "frame_size_reduction": 0,
         }
         self.stream = WebGear_RTC(logging=True, **self.live_feed_options)
 
@@ -459,9 +457,8 @@ class LiveFeed:
             source.start()
 
         # Give the sources some time to read frames
-        time.sleep(4)
+        time.sleep(10)
         uvicorn.run(self.stream(), host="0.0.0.0", port=8000)
-        self.stream.shutdown()
 
     def start(self):
         """

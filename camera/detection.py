@@ -17,8 +17,7 @@ from vidgear.gears.helper import reducer
 
 NOISE_KERNEL = cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3))
 
-# TODO: Implement detect in background method
-
+# TODO: Add object detection
 # TODO: Clean dependencies
 # TODO: DOCUMENTATION
 # TODO: WRITE TESTS
@@ -29,7 +28,7 @@ class IntuderRecorder:
     TODO
     """
 
-    def __init__(self, detection_sources, recording_directory, max_stored_frames=150):
+    def __init__(self, detection_sources, recording_directory, max_stored_frames=80):
         self.sources = detection_sources
         self.recordings_directory = recording_directory
         self.max_stored_frames = max_stored_frames
@@ -69,7 +68,8 @@ class IntuderRecorder:
         writer.close()
         video_path = self._rename_video(source)
         if source.is_active:
-            output_params = {"-fourcc": "mp4v", "-fps": 20}
+            print("Creating video writer")
+            output_params = {"-fourcc": "mp4v", "-fps": config.FPS // 2}
             self._video_writers[source.name] = WriteGear(
                 f"{self.recordings_directory}/videos/{source.name}/intruder.mp4",
                 compression_mode=False,
@@ -79,9 +79,11 @@ class IntuderRecorder:
 
         paths = [video_path]
         if thumb:
+            print("Creating thumbnail")
             thumb_path = self._save_thumb(source)
             paths.append(thumb_path)
         if gif:
+            print("Creating GIF")
             gif_path = self._save_gif(source)
             paths.append(gif_path)
 
@@ -163,7 +165,7 @@ class IntuderRecorder:
 
     def _make_video_writers(self):
         for source in self.sources:
-            output_params = {"-fourcc": "mp4v", "-fps": 20}
+            output_params = {"-fourcc": "mp4v", "-fps": config.FPS // 2}
             self._video_writers[source.name] = WriteGear(
                 f"{self.recordings_directory}/videos/{source.name}/intruder.mp4",
                 compression_mode=False,
@@ -199,7 +201,11 @@ class DetectionSource:
         self.source = source
         self.conseq_motion_frames = 0
 
-        self._bg_subtractor = cv.bgsegm.createBackgroundSubtractorCNT(isParallel=False)
+        self._bg_subtractor = cv.bgsegm.createBackgroundSubtractorCNT(
+            minPixelStability=config.FPS // 2,
+            maxPixelStability=(config.FPS // 2) * 4,
+            isParallel=False,
+        )
 
     @property
     def is_active(self):
@@ -222,12 +228,11 @@ class DetectionSource:
             self.conseq_motion_frames = 0
             self.source.stop()
 
-    # @profile
-    def read(self):
+    def read(self, resize=False):
         """
         TODO
         """
-        frame = self.source.read()
+        frame = self.source.read(resize)
         # read_attempts = 0
         # while frame is None and read_attempts < 3:
         #     time.sleep(0.5)
@@ -311,7 +316,7 @@ class IntruderDetector:
         self,
         detection_sources,
         recording_directory,
-        num_frames_to_record=300,
+        num_frames_to_record=100,
         display_frame=False,
     ):
         self.detection_sources = detection_sources
@@ -342,11 +347,11 @@ class IntruderDetector:
             return False
         return True
 
-    def read_frame(self, source: DetectionSource):
+    def read_frame(self, source: DetectionSource, resize=False):
         """
         TODO
         """
-        frame = source.read()
+        frame = source.read(resize)
 
         if frame is None:
             source.stop()
@@ -363,7 +368,6 @@ class IntruderDetector:
         else:
             source.conseq_motion_frames = 0
 
-    # @profile
     def detect(self, min_conseq_frames=15):
         """
         TODO
@@ -376,13 +380,13 @@ class IntruderDetector:
         while self.get_detection_status():
 
             if frame_count % 2 == 1:
-                time.sleep(1 / config.DESIRED_FPS)
+                time.sleep(1 / config.FPS)
                 frame_count += 1
                 continue
 
             for source in self.detection_sources:
 
-                frame = self.read_frame(source)
+                frame = self.read_frame(source, resize=True)
 
                 if frame is None:
                     continue
@@ -395,7 +399,7 @@ class IntruderDetector:
 
                 self.check_for_intruders(frame, source, min_conseq_frames)
             frame_count += 1
-            if cv.waitKey(1000 // config.DESIRED_FPS) == ord("q"):
+            if cv.waitKey(1000 // config.FPS) == ord("q"):
                 break
 
         if self._display_frame:
@@ -404,7 +408,6 @@ class IntruderDetector:
 
         self.stop_detection()
 
-    # @profile
     def detect_motion_in_frame(self, frame, source):
         """
         TODO
@@ -455,7 +458,7 @@ class IntruderDetector:
                 self._save_recordings(source)
 
     def _save_recordings(self, source):
-        Thread(target=self._recorder.save, args=(source,), daemon=True).start()
+        Thread(target=self._recorder.save, args=(source, False), daemon=True).start()
 
 
 class Intruder:
