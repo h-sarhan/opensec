@@ -6,12 +6,10 @@ The CameraHub class has several methods that act as wrappers around lower-level
 VidGear and OpenCV functions. These methods are responsible for streaming the
 camera feeds to the front end and for intruder detection.
 """
-import http.server
 import json
 import os
 import random
 import shutil
-import socketserver
 import subprocess
 import time
 from datetime import datetime
@@ -21,18 +19,16 @@ import config
 import cv2 as cv
 import imageio
 import numpy as np
-from vidgear.gears import StreamGear, VideoGear, WriteGear
+import uvicorn
+from vidgear.gears import VideoGear, WriteGear
+from vidgear.gears.asyncio import WebGear_RTC
 from vidgear.gears.helper import create_blank_frame, reducer
 
 # TODO: Avoid type checking with isinstance
 # TODO: DOCUMENTATION
 # TODO: WRITE TESTS
-# TODO: Remove VideoGear to improve performance
 # TODO: Add logging and error handling
 # TODO: Create BaseSource or Source class
-
-FRAME_WIDTH = 448
-FRAME_HEIGHT = 252
 
 
 class VideoRecorder:
@@ -302,15 +298,14 @@ class CameraSource:
                     print(f"ERROR: Could not connect to {self.name}.")
                     print("Stopping camera.")
                     self.stop()
-            elif self.resize_frame and self.is_active:
-                # frame = reducer(
-                #     frame, percentage=self.reduce_amount, interpolation=cv.INTER_NEAREST
-                # )
-                frame = cv.resize(frame, (FRAME_WIDTH, FRAME_HEIGHT), cv.INTER_NEAREST)
+            elif self.resize_frame:
+                frame = cv.resize(
+                    frame, (config.FRAME_WIDTH, config.FRAME_HEIGHT), cv.INTER_NEAREST
+                )
 
             # Update frame
             self._current_frame = frame
-            time.sleep(0.05)
+            time.sleep(1 / config.DESIRED_FPS)
 
     def stop(self):
         """
@@ -320,12 +315,12 @@ class CameraSource:
         and stops the camera stream and video capture object.
         """
         print(f"Stopping camera source {self.name}.")
-        if self._camera and self._camera_open:
-            self._camera.stop()
-
         self._connected = False
         self._camera_open = False
         self._reconnect_attempts = 0
+
+        if self._camera and self._camera_open:
+            self._camera.stop()
 
     @staticmethod
     def check_source_alive(source, timeout=5):
@@ -406,35 +401,24 @@ class CameraSource:
         """
 
         if not CameraSource.check_source_alive(self.source):
-            raise RuntimeError("ERROR: Could not connect to camera.")
+            raise RuntimeError(f"ERROR: Could not connect to camera {self.name}.")
         try:
+            print(f"{self.name} alive attempting connection")
+            options = {"THREADED_QUEUE_MODE": False}
             camera = VideoGear(
-                source=self.source,
-                logging=config.CAM_DEBUG,
+                source=self.source, logging=True, time_delay=2, **options
             ).start()
             self._connected = True
             self._camera = camera
+            print(f"Connected to camera {self.name}")
         except RuntimeError as err:
-            raise RuntimeError("ERROR: Could not connect to camera.") from err
+            raise RuntimeError(
+                f"ERROR: Could not connect to camera {self.name}."
+            ) from err
 
     def _reconnect(self):
         """
-        Attempts a reconnection to the camera
-
-        A maximum of `self._max_reconnect_attempts` will be made before raising
-        an exception.
-
-        Returns
-        -------
-        camera: VideoGear object
-            A VideoGear video capture object will be returned after a
-            successful connection.
-
-        Raises
-        ------
-        RuntimeError
-            A RuntimeError is raised when `self._reset_attempts`
-            reaches the maximum value
+        TODO
         """
         while self._reconnect_attempts < self._max_reconnect_attempts:
             print(f"{self.name} reconnection attempt #{self._reconnect_attempts+1}")
@@ -448,8 +432,9 @@ class CameraSource:
             if CameraSource.check_source_alive(self.source):
                 print("Source alive. Attempting reconnection")
                 try:
+                    options = {"THREADED_QUEUE_MODE": False}
                     camera = VideoGear(
-                        source=self.source, logging=config.CAM_DEBUG
+                        source=self.source, logging=True, time_delay=2, **options
                     ).start()
                     self._connected = True
                     self._camera = camera
@@ -512,12 +497,15 @@ class VideoSource:
         return self._current_frame
 
     def _update_frame(self):
+
         while self.is_active:
             # Read a frame from the camera
             frame = self._vid_cap.read()
 
             if self.resize_frame and frame is not None:
-                frame = cv.resize(frame, (FRAME_WIDTH, FRAME_HEIGHT), cv.INTER_NEAREST)
+                frame = cv.resize(
+                    frame, (config.FRAME_WIDTH, config.FRAME_HEIGHT), cv.INTER_NEAREST
+                )
 
             if frame is None:
                 self._current_frame = None
@@ -525,7 +513,7 @@ class VideoSource:
 
             # Update frame
             self._current_frame = frame
-            time.sleep(0.05)
+            time.sleep(1 / config.DESIRED_FPS)
 
     def stop(self):
         """
@@ -538,57 +526,85 @@ class VideoSource:
         self._vid_cap_open = False
 
 
+class LiveFeedProducer:
+    """
+    TODO
+    """
+
+    def __init__(self, sources):
+        self.sources = sources
+        self.running = True
+        self.blank_frame = create_blank_frame(
+            np.empty(
+                shape=(config.FRAME_HEIGHT, config.FRAME_WIDTH, 3), dtype=np.uint8
+            ),
+            text="",
+        )
+        self._live_feed_frame = np.empty(
+            shape=(config.FRAME_HEIGHT * 2, config.FRAME_WIDTH * 2, 3), dtype=np.uint8
+        )
+
+    # @profile
+    def read(self):
+        """
+        TODO
+        """
+        # TODO: Make this work with a variable number of sources
+
+        if self.running:
+            frames = []
+            for source in self.sources:
+                frame = source.read()
+                if frame is None:
+                    frames.append(self.blank_frame)
+                else:
+                    frames.append(frame)
+
+            if not isinstance(self.sources[0], CameraSource):
+                frames = [
+                    cv.resize(
+                        frame,
+                        (config.FRAME_WIDTH, config.FRAME_HEIGHT),
+                        interpolation=cv.INTER_NEAREST,
+                    )
+                    for frame in frames
+                ]
+
+            frame_height = config.FRAME_HEIGHT
+            frame_width = config.FRAME_WIDTH
+
+            self._live_feed_frame[:frame_height, :frame_width] = frames[0]
+            self._live_feed_frame[:frame_height, frame_width:] = frames[1]
+            self._live_feed_frame[frame_height:, :frame_width] = frames[2]
+            self._live_feed_frame[frame_height:, frame_width:] = frames[3]
+            return self._live_feed_frame
+
+        return None
+
+    def stop(self):
+        """
+        TODO
+        """
+        self.running = False
+
+
 class LiveFeed:
     """
     TODO
     """
 
-    stream_params = {
-        "-input_framerate": 20,
-        "-livestream": True,
-        "-clear_prev_assets": True,
-        "-seg_duration": 10,
-        "-window_size": 5,
-        "-extra_window_size": 3,
-        # "-crf": 30,
-        "-preset": "fast",
-        # TODO: Check for platform and cpu and decide on a hardware encoder
-        # if available
-        "-loglevel": "quiet",
-        # "-vcodec": "libx264",
-        "-vcodec": "h264_nvenc",
-    }
-
     def __init__(self, sources, stream_directory="stream"):
         self.sources = sources
         self.stream_directory = stream_directory
-        # self._make_dirs()
-        # self.streamers = [
-        #     StreamGear(
-        #         output=f"{self.stream_directory}/{source.name}/playlist.m3u8",
-        #         format="hls",
-        #         logging=False,
-        #         **self.stream_params,
-        #     )
-        #     for source in self.sources
-        # ]
+        self.live_feed_options = {
+            "custom_stream": LiveFeedProducer(self.sources),
+            "custom_data_location": "./",
+            "enable_live_broadcast": True,
+        }
+        self.stream = WebGear_RTC(logging=True, **self.live_feed_options)
 
-        self.streamer = StreamGear(
-            output=f"{self.stream_directory}/playlist.m3u8",
-            format="hls",
-            logging=False,
-            **self.stream_params,
-        )
         self._streaming = False
         self._server = None
-        self._live_feed_frame = np.empty(
-            shape=(FRAME_HEIGHT * 2, FRAME_WIDTH * 2, 3), dtype=np.uint8
-        )
-        # TODO: Create a blank frame with my own font
-        self.blank_frame = create_blank_frame(
-            np.empty(shape=(FRAME_WIDTH, FRAME_HEIGHT, 3), dtype=np.uint8),
-            text="",
-        )
 
     @property
     def is_streaming(self):
@@ -609,29 +625,9 @@ class LiveFeed:
             source.start()
 
         # Give the sources some time to read frames
-        time.sleep(1)
-        while self.is_streaming:
-            full_frame = self.produce_live_feed_frame()
-            if full_frame is None:
-                continue
-            # cv.imshow("live feed", full_frame)
-            # print(full_frame)
-            self.streamer.stream(full_frame)
-
-            # time.sleep(0.1)
-            if cv.waitKey(50) == ord("q"):
-                break
-
-        print("Sources are no longer being streamed")
-
-    def start_server(self):
-        """
-        TODO
-        """
-        Handler = http.server.SimpleHTTPRequestHandler
-        self._server = socketserver.TCPServer(("0.0.0.0", 8000), Handler)
-        print("Streaming server started at port", 8000)
-        self._server.serve_forever()
+        time.sleep(4)
+        uvicorn.run(self.stream(), host="0.0.0.0", port=8000)
+        self.stream.shutdown()
 
     def start(self):
         """
@@ -639,49 +635,15 @@ class LiveFeed:
         """
         self._streaming = True
         Thread(target=self.start_streaming_live_feed).start()
-        Thread(target=self.start_server).start()
-        # self.start_server()
-
-    # @profile
-    def produce_live_feed_frame(self):
-        """
-        TODO
-        """
-        if len(self.sources) == 4:
-            frames = []
-            for source in self.sources:
-                frame = source.read()
-                if frame is None:
-                    frames.append(self.blank_frame)
-                else:
-                    frames.append(frame)
-
-            frame_shapes = [frame.shape for frame in frames]
-            if not all(shape == frame_shapes[0] for shape in frame_shapes):
-                frames = [
-                    cv.resize(
-                        frame,
-                        (FRAME_WIDTH, FRAME_HEIGHT),
-                        interpolation=cv.INTER_NEAREST,
-                    )
-                    for frame in frames
-                ]
-
-            self._live_feed_frame[:FRAME_HEIGHT, :FRAME_WIDTH] = frames[0]
-            self._live_feed_frame[:FRAME_HEIGHT, FRAME_WIDTH:] = frames[1]
-            self._live_feed_frame[FRAME_HEIGHT:, :FRAME_WIDTH] = frames[2]
-            self._live_feed_frame[FRAME_HEIGHT:, FRAME_WIDTH:] = frames[3]
-
-            return self._live_feed_frame
 
     def stop(self):
         """
         TODO
         """
         print("Stopping streaming server")
-        self._streaming = False
-        self._server.shutdown()
-        self._server.server_close()
+        if self._streaming:
+            self._streaming = False
+            self.stream.shutdown()
 
     def _make_dirs(self):
         for source in self.sources:

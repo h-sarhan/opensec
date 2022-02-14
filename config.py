@@ -10,9 +10,17 @@ LOCAL_IP_ADDRESS = socket.gethostbyname(HOST_NAME)
 STREAM_DIRECTORY = ROOT_DIR.joinpath("stream").as_posix()
 CAM_DEBUG = True
 PORT = 8080
+FRAME_WIDTH = 448
+FRAME_HEIGHT = 252
+DESIRED_FPS = 15
 
 load_dotenv()
-TEST_CAM = os.getenv("TEST_CAM")
+TEST_CAMS = [
+    os.getenv("TEST_CAM_1"),
+    os.getenv("TEST_CAM_2"),
+    os.getenv("TEST_CAM_3"),
+    os.getenv("TEST_CAM_4"),
+]
 TEST_VID_DIRECTORY = ROOT_DIR.joinpath(os.getenv("TEST_VID_DIRECTORY")).as_posix()
 TEST_VIDEO_OUTPUT_DIRECTORY = ROOT_DIR.joinpath(
     os.getenv("TEST_VIDEO_OUTPUT_DIRECTORY")

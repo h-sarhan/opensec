@@ -7,6 +7,8 @@ yolo/
 main.py
 inputs.txt
 ssd/
+.vidgear/
+main.py.lprof
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
