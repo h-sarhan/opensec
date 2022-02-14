@@ -1,2 +1,2 @@
-from .camera import CameraSource, LiveFeed, VideoRecorder, VideoSource
-from .detection import DetectionSource, Intruder, IntruderDetector
+from .camera import CameraSource, LiveFeed, VideoSource
+from .detection import DetectionSource, Intruder, IntruderDetector, IntuderRecorder

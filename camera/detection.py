@@ -3,18 +3,190 @@ TODO
 """
 
 
+import os
+import random
 import time
+from datetime import datetime
+from threading import Thread
 
+import config
 import cv2 as cv
-
-from .camera import VideoRecorder
+import imageio
+from vidgear.gears import WriteGear
+from vidgear.gears.helper import reducer
 
 NOISE_KERNEL = cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3))
 
-# TODO: INTEGRATE OBJECT DETECTION QUEUE
 # TODO: Implement detect in background method
+
+# TODO: Clean dependencies
 # TODO: DOCUMENTATION
 # TODO: WRITE TESTS
+
+
+class IntuderRecorder:
+    """
+    TODO
+    """
+
+    def __init__(self, detection_sources, recording_directory, max_stored_frames=150):
+        self.sources = detection_sources
+        self.recordings_directory = recording_directory
+        self.max_stored_frames = max_stored_frames
+
+        self._video_writers = {}
+        self._start_times = {}
+        self._stored_frames = {}
+        self._setup()
+
+    def get_num_frames_recorded(self, source):
+        """
+        TODO
+        """
+        return len(self._stored_frames[source.name])
+
+    def add_frame(self, frame, source):
+        """
+        TODO
+        """
+        if self._start_times[source.name] is None:
+            current_date_time = datetime.now().strftime("%Y_%m_%d %Hh %Mm %Ss")
+            self._start_times[source.name] = current_date_time
+
+        if frame is not None:
+            stored_frames = self._stored_frames[source.name]
+            if len(stored_frames) < self.max_stored_frames:
+                stored_frames.append(frame)
+
+            writer = self._video_writers[source.name]
+            writer.write(frame)
+
+    def save(self, source, gif=True, thumb=True):
+        """
+        TODO
+        """
+        writer = self._video_writers[source.name]
+        writer.close()
+        video_path = self._rename_video(source)
+        if source.is_active:
+            output_params = {"-fourcc": "mp4v", "-fps": 20}
+            self._video_writers[source.name] = WriteGear(
+                f"{self.recordings_directory}/videos/{source.name}/intruder.mp4",
+                compression_mode=False,
+                logging=False,
+                **output_params,
+            )
+
+        paths = [video_path]
+        if thumb:
+            thumb_path = self._save_thumb(source)
+            paths.append(thumb_path)
+        if gif:
+            gif_path = self._save_gif(source)
+            paths.append(gif_path)
+
+        self._start_times[source.name] = None
+        self._stored_frames[source.name] = []
+        return paths
+
+    def _rename_video(self, source):
+        """
+        TODO
+        """
+        videos_directory = f"{self.recordings_directory}/videos"
+        base_name = f"{videos_directory}/{source.name}"
+        old_file_path = f"{base_name}/intruder.mp4"
+        new_file_path = f"{base_name}/{self._start_times[source.name]}.mp4"
+
+        rename_tries = 0
+        while not os.path.exists(old_file_path):
+            if rename_tries == 3:
+                return None
+            time.sleep(2)
+            rename_tries += 1
+        os.rename(old_file_path, new_file_path)
+        return new_file_path
+
+    def _save_thumb(self, source):
+        """
+        TODO
+        """
+        thumbnails_directory = f"{self.recordings_directory}/thumbnails"
+        base_dir = f"{thumbnails_directory}/{source.name}"
+        thumb_name = self._start_times[source.name]
+        thumb_path = f"{base_dir}/{thumb_name}.jpg"
+        stored_frames = self._stored_frames[source.name]
+        if stored_frames is not None and len(stored_frames) != 0:
+            thumb_frame = random.choice(stored_frames)
+            if thumb_frame is not None:
+                cv.imwrite(thumb_path, thumb_frame)
+                return thumb_path
+        return None
+
+    def _save_gif(self, source):
+        """
+        TODO
+        """
+        gif_frames = []
+        stored_frames = self._stored_frames[source.name]
+        for frame_idx, frame in enumerate(stored_frames):
+            if frame_idx % 4 != 0:
+                continue
+            rgb_frame = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
+            reduced_frame = reducer(
+                rgb_frame, percentage=40, interpolation=cv.INTER_NEAREST
+            )
+            gif_frames.append(reduced_frame)
+
+        gifs_directory = f"{self.recordings_directory}/gifs"
+        base_dir = f"{gifs_directory}/{source.name}"
+        gif_name = self._start_times[source.name]
+        gif_path = f"{base_dir}/{gif_name}.gif"
+        if gif_frames:
+            imageio.mimsave(
+                gif_path, gif_frames, fps=5, subrectangles=True, palettesize=64
+            )
+
+            return gif_path
+
+        return None
+
+    def _setup(self):
+        """
+        TODO
+        """
+        self._make_paths()
+        self._make_video_writers()
+        for source in self.sources:
+            self._start_times[source.name] = None
+            self._stored_frames[source.name] = []
+
+    def _make_video_writers(self):
+        for source in self.sources:
+            output_params = {"-fourcc": "mp4v", "-fps": 20}
+            self._video_writers[source.name] = WriteGear(
+                f"{self.recordings_directory}/videos/{source.name}/intruder.mp4",
+                compression_mode=False,
+                logging=False,
+                **output_params,
+            )
+
+    def _make_paths(self):
+        if not os.path.exists(self.recordings_directory):
+            os.mkdir(self.recordings_directory)
+
+        directories = [
+            f"{self.recordings_directory}/videos",
+            f"{self.recordings_directory}/thumbnails",
+            f"{self.recordings_directory}/gifs",
+        ]
+        for directory in directories:
+            if not os.path.exists(directory):
+                os.mkdir(directory)
+
+            for source in self.sources:
+                if not os.path.exists(f"{directory}/{source.name}"):
+                    os.mkdir(f"{directory}/{source.name}")
 
 
 class DetectionSource:
@@ -26,33 +198,45 @@ class DetectionSource:
         self.name = name
         self.source = source
         self.conseq_motion_frames = 0
-        self.active = False
 
         self._bg_subtractor = cv.bgsegm.createBackgroundSubtractorCNT(isParallel=False)
+
+    @property
+    def is_active(self):
+        """
+        TODO
+        """
+        return self.source.is_active
 
     def start(self):
         """
         TODO
         """
         self.source.start()
-        self.active = True
 
     def stop(self):
         """
         TODO
         """
-        if self.active:
+        if self.is_active:
             self.conseq_motion_frames = 0
             self.source.stop()
-            self.active = False
 
+    # @profile
     def read(self):
         """
         TODO
         """
         frame = self.source.read()
+        # read_attempts = 0
+        # while frame is None and read_attempts < 3:
+        #     time.sleep(0.5)
+        #     frame = self.source.read()
+        #     read_attempts += 1
+
         if frame is None:
             self.stop()
+
         return frame
 
     def get_foreground_mask(self, frame):
@@ -136,7 +320,7 @@ class IntruderDetector:
         self._max_frames_to_record = num_frames_to_record
 
         self._detection_status = False
-        self._recorder = VideoRecorder(
+        self._recorder = IntuderRecorder(
             self.detection_sources, recording_directory, num_frames_to_record
         )
 
@@ -152,7 +336,7 @@ class IntruderDetector:
         TODO
         """
         all_sources_inactive = all(
-            not source.active for source in self.detection_sources
+            not source.is_active for source in self.detection_sources
         )
         if not self._detection_status or all_sources_inactive:
             return False
@@ -169,14 +353,6 @@ class IntruderDetector:
 
         return frame
 
-    def show_frame(self, frame, source):
-        """
-        TODO
-        """
-        if self._display_frame:
-            # Show the resized frame with bounding boxes around intruders (if any)
-            cv.imshow(f"({source.name}) Motion Detection", frame)
-
     @staticmethod
     def update_conseq_frames(source, contours):
         """
@@ -187,6 +363,7 @@ class IntruderDetector:
         else:
             source.conseq_motion_frames = 0
 
+    # @profile
     def detect(self, min_conseq_frames=15):
         """
         TODO
@@ -195,8 +372,13 @@ class IntruderDetector:
 
         frame_count = 0
         self.start_sources()
-
+        time.sleep(1)
         while self.get_detection_status():
+
+            if frame_count % 2 == 1:
+                time.sleep(1 / config.DESIRED_FPS)
+                frame_count += 1
+                continue
 
             for source in self.detection_sources:
 
@@ -207,24 +389,22 @@ class IntruderDetector:
 
                 self.detect_motion_in_frame(frame, source)
 
+                if self._display_frame:
+                    # Show the resized frame with bounding boxes around intruders (if any)
+                    cv.imshow(f"({source.name}) Motion Detection", frame)
+
                 self.check_for_intruders(frame, source, min_conseq_frames)
-
-            # Exit loop by pressing q
-            if cv.waitKey(20) == ord("q"):
-                break
-
-            if frame_count % 2 == 1:
-                time.sleep(0.02)
-                continue
-
             frame_count += 1
-
-        self.stop_detection()
+            if cv.waitKey(1000 // config.DESIRED_FPS) == ord("q"):
+                break
 
         if self._display_frame:
             # Close all windows
             cv.destroyAllWindows()
 
+        self.stop_detection()
+
+    # @profile
     def detect_motion_in_frame(self, frame, source):
         """
         TODO
@@ -232,8 +412,6 @@ class IntruderDetector:
         foreground_mask = source.get_foreground_mask(frame)
 
         contours = source.find_contours(foreground_mask, display_frame=frame)
-
-        self.show_frame(frame, source)
 
         self.update_conseq_frames(source, contours)
 
@@ -267,19 +445,17 @@ class IntruderDetector:
         """
         TODO
         """
-        for source in self.detection_sources:
-            source.stop()
-
         self._detection_status = False
 
         for source in self.detection_sources:
 
             num_frames_recorded = self._recorder.get_num_frames_recorded(source)
             if num_frames_recorded >= 50:
+                print(f"Saving recordings for source {source.name}")
                 self._save_recordings(source)
 
     def _save_recordings(self, source):
-        self._recorder.save(source)
+        Thread(target=self._recorder.save, args=(source,), daemon=True).start()
 
 
 class Intruder:
@@ -296,8 +472,12 @@ class Intruder:
         self.intruder_type = None
 
         self._frames = frames
+        # self.analyze_in_background()
 
-    def analyze(self):
+    def _read_frames(self):
+        pass
+
+    def _analyze(self):
         """
         TODO
         """
