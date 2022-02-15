@@ -88,14 +88,14 @@ class CameraSource:
             self._camera_thread = Thread(target=self._update_frame)
             self._camera_thread.start()
 
-    def read(self, resize=False):
+    def read(self, resize_frame=None):
         """
         TODO
         """
-        if resize and self._current_frame is not None:
+        if resize_frame and self._current_frame is not None:
             return cv.resize(
                 self._current_frame,
-                (config.RESIZED_FRAME_WIDTH, config.RESIZED_FRAME_HEIGHT),
+                resize_frame,
                 cv.INTER_NEAREST,
             )
         return self._current_frame
@@ -321,14 +321,14 @@ class VideoSource:
             self._vid_cap_thread = Thread(target=self._update_frame)
             self._vid_cap_thread.start()
 
-    def read(self, resize=False):
+    def read(self, resize_frame=None):
         """
         TODO
         """
-        if resize and self._current_frame is not None:
+        if resize_frame and self._current_frame is not None:
             return cv.resize(
                 self._current_frame,
-                (config.RESIZED_FRAME_WIDTH, config.RESIZED_FRAME_HEIGHT),
+                resize_frame,
                 cv.INTER_NEAREST,
             )
         return self._current_frame
@@ -363,17 +363,19 @@ class LiveFeedProducer:
     TODO
     """
 
+    reduce_amount = 0.4
+
     def __init__(self, sources):
         self.sources = sources
         self.running = True
         self._live_feed_shape = (
-            config.RESIZED_FRAME_HEIGHT * 2,
-            config.RESIZED_FRAME_WIDTH * 2,
+            int(360 * (1 - self.reduce_amount)) * 2,
+            int(640 * (1 - self.reduce_amount)) * 2,
             3,
         )
         self._single_frame_shape = (
-            config.RESIZED_FRAME_HEIGHT,
-            config.RESIZED_FRAME_WIDTH,
+            int(360 * (1 - self.reduce_amount)),
+            int(640 * (1 - self.reduce_amount)),
             3,
         )
         self._live_feed_frame = np.zeros(self._live_feed_shape, np.uint8)
@@ -395,14 +397,15 @@ class LiveFeedProducer:
         while self.running:
             frames = []
             for source in self.sources:
-                frame = source.read(resize=True)
+                frame_height, frame_width = self._single_frame_shape[:2]
+                frame = source.read(resize_frame=(frame_width, frame_height))
                 if frame is None:
                     print("Frame is none")
                     frames.append(self._blank_frame)
                 else:
                     frames.append(frame)
 
-            frame_height, frame_width, _ = self._single_frame_shape
+            frame_height, frame_width = self._single_frame_shape[:2]
             self._live_feed_frame[:frame_height, :frame_width] = frames[0]
             self._live_feed_frame[:frame_height, frame_width:] = frames[1]
             self._live_feed_frame[frame_height:, :frame_width] = frames[2]
@@ -457,7 +460,7 @@ class LiveFeed:
             source.start()
 
         # Give the sources some time to read frames
-        time.sleep(10)
+        time.sleep(5)
         uvicorn.run(self.stream(), host="0.0.0.0", port=8000)
 
     def start(self):

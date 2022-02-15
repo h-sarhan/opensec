@@ -10,8 +10,6 @@ LOCAL_IP_ADDRESS = socket.gethostbyname(HOST_NAME)
 STREAM_DIRECTORY = ROOT_DIR.joinpath("stream").as_posix()
 CAM_DEBUG = True
 PORT = 8080
-RESIZED_FRAME_WIDTH = 640
-RESIZED_FRAME_HEIGHT = 360
 FPS = 15
 
 load_dotenv()

@@ -228,11 +228,11 @@ class DetectionSource:
             self.conseq_motion_frames = 0
             self.source.stop()
 
-    def read(self, resize=False):
+    def read(self, resize_frame=None):
         """
         TODO
         """
-        frame = self.source.read(resize)
+        frame = self.source.read(resize_frame)
         # read_attempts = 0
         # while frame is None and read_attempts < 3:
         #     time.sleep(0.5)
@@ -347,11 +347,11 @@ class IntruderDetector:
             return False
         return True
 
-    def read_frame(self, source: DetectionSource, resize=False):
+    def read_frame(self, source: DetectionSource, resize_frame=None):
         """
         TODO
         """
-        frame = source.read(resize)
+        frame = source.read(resize_frame)
 
         if frame is None:
             source.stop()
@@ -386,7 +386,7 @@ class IntruderDetector:
 
             for source in self.detection_sources:
 
-                frame = self.read_frame(source, resize=True)
+                frame = self.read_frame(source, resize_frame=(640, 360))
 
                 if frame is None:
                     continue
