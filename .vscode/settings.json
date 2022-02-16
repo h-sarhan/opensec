@@ -32,6 +32,7 @@
     "ndim",
     "nvenc",
     "onnx",
+    "onvif",
     "OPENCV",
     "Popen",
     "RETR",
