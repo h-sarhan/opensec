@@ -31,9 +31,12 @@ class Intruder(models.Model):
     date_added = models.DateTimeField("Intruder detection date", default=timezone.now)
     label = models.CharField("Auto-generated label", max_length=50, default="Unknown")
 
-    # These will be file paths for now
-    video_path = models.FilePathField("Video file path", null=True, blank=True)
-    thumb_path = models.FilePathField("Thumbnail file path", null=True, blank=True)
+    video = models.FileField(
+        "Video of intruder", upload_to="intuder_videos", blank=True
+    )
+    thumbnail = models.ImageField(
+        "Intruder thumbnail", upload_to="intuder_thumbs", blank=True
+    )
 
     camera = models.ForeignKey(
         Camera,

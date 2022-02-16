@@ -10,6 +10,7 @@ numpy = "*"
 python-dotenv = "*"
 opencv-contrib-python = "*"
 django = "*"
+pillow = "*"
 
 [dev-packages]
 pytest = "*"
