@@ -16,6 +16,7 @@ pytest = "*"
 pylint = "*"
 black = "*"
 line-profiler = "*"
+pylint-django = "*"
 
 [requires]
 python_version = "3.9"
