@@ -9,7 +9,7 @@ imageio = "*"
 numpy = "*"
 python-dotenv = "*"
 opencv-contrib-python = "*"
-simplejpeg = "*"
+django = "*"
 
 [dev-packages]
 pytest = "*"
