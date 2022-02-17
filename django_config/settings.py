@@ -140,4 +140,4 @@ STATICFILES_STORAGE = "django.contrib.staticfiles.storage.StaticFilesStorage"
 
 # Media/stream files setup
 MEDIA_URL = "/media/"
-MEDIA_ROOT = BASE_DIR / "stream_files"
+MEDIA_ROOT = BASE_DIR / "media"

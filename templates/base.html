@@ -8,9 +8,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>OpenSec | {% block title %}{% endblock title %}</title>
     <link rel="stylesheet" href="{% static 'bulma.min.css' %}" />
-    <link rel="stylesheet" href="{% static 'base.css' %}">
+    <link rel="stylesheet" href="{% static 'base.css' %}" />
   </head>
-  <body>
+  <body class="has-navbar-fixed-top">
     {% include 'navbar.html' %}
     <main>{% block content %} {% endblock content %}</main>
     <script src="{% static 'burgerMenuCollapse.js' %}"></script>
