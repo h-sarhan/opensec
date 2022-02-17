@@ -1,40 +1,42 @@
-{% extends 'base.html' %} 
-{% block title %}Log In{% endblock title %} 
-{% load static %} 
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Log In{% endblock title %}
+
 {% block content %}
-<section class="hero is-fullheight has-background-grey-darker">
-  <div class="hero-body">
-    <div class="container has-text-centered">
-      <div class="columns is-centered">
-        <div class="column is-half">
-          <figure class="image is-4by1 mb-6">
-            <img src="{% static 'opensec logo.png' %}" class="has-ratio" width="508" height="125" />
-          </figure>
-          <div class="box">
-            <h1 class="title has-text-dark">Welcome to OpenSec</h1>
-            <hr class="is-dark" />
-            <form method="post">
-              {% csrf_token %}
-              <div class="columns is-centered">
-                <div class="form-element column is-half">
-                  <label class="label has-text-grey-dark">Username</label>
-                  <div class="control">{{ form.username }}</div>
+  <section class="hero is-fullheight has-background-grey-darker">
+    <div class="hero-body">
+      <div class="container has-text-centered">
+        <div class="columns is-centered">
+          <div class="column is-half">
+            <figure class="image is-4by1 mb-6">
+              <img src="{% static 'opensec logo.png' %}" class="has-ratio" width="508" height="125" />
+            </figure>
+            <div class="box">
+              <h1 class="title has-text-dark">Welcome to OpenSec</h1>
+              <hr class="is-dark" />
+              <form method="post">
+                {% csrf_token %}
+                <div class="columns is-centered">
+                  <div class="form-element column is-half">
+                    <label class="label has-text-grey-dark">Username</label>
+                    <div class="control">{{ form.username }}</div>
 
-                  <label class="label has-text-grey-dark mt-5">Password</label>
-                  <div class="control">{{ form.password }}</div>
+                    <label class="label has-text-grey-dark mt-5">Password</label>
+                    <div class="control">{{ form.password }}</div>
+                  </div>
                 </div>
-              </div>
 
-              <div class="control">
-                <button type="submit" class="button is-success my-4 mx-4">Log In</button>
-                <a href="{% url 'register' %}" class="button is-link my-4 mx-4">Register</a>
-              </div>
-            </form>
+                <div class="control">
+                  <button type="submit" class="button is-success my-4 mx-4">Log In</button>
+                  <a href="{% url 'register' %}" class="button is-link my-4 mx-4">Register</a>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       </div>
     </div>
-  </div>
-</section>
+  </section>
 
 {% endblock content %}

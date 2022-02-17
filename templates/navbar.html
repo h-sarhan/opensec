@@ -1,43 +1,45 @@
-{% load static %} {% if user.is_authenticated %}
-<nav
-  class="navbar is-dark has-shadow is-spaced is-fixed-top"
-  role="navigation"
-  aria-label="main navigation"
->
-  <div class="navbar-brand">
-    <figure class="navbar-item image" href="">
-      <img src="{% static 'opensec logo.png' %}" />
-    </figure>
-    <a
-      role="button"
-      class="navbar-burger"
-      aria-label="menu"
-      aria-expanded="false"
-      data-target="openSecNavbar"
-    >
-      <span aria-hidden="true"></span>
-      <span aria-hidden="true"></span>
-      <span aria-hidden="true"></span>
-    </a>
-  </div>
+{% load static %} 
 
-  <div id="openSecNavbar" class="navbar-menu">
-    <div class="navbar-end">
-      <a class="navbar-item is-success is-size-6 has-text-light button m-2"> View Cameras</a>
-      <a class="navbar-item is-link is-size-6 has-text-light button m-2"> View Intruders</a>
+{% if user.is_authenticated %}
+  <nav
+    class="navbar is-dark has-shadow is-spaced is-fixed-top"
+    role="navigation"
+    aria-label="main navigation"
+  >
+    <div class="navbar-brand">
+      <figure class="navbar-item image" href="">
+        <img src="{% static 'opensec logo.png' %}" />
+      </figure>
       <a
-        href="{% url 'manage_cameras' %}"
-        class="navbar-item is-info is-size-6 has-text-light button m-2"
+        role="button"
+        class="navbar-burger"
+        aria-label="menu"
+        aria-expanded="false"
+        data-target="openSecNavbar"
       >
-        Manage Cameras</a
-      >
-      <a
-        href="{% url 'logout' %}"
-        class="navbar-item is-danger is-size-6 has-text-light button m-2"
-      >
-        Log Out</a
-      >
+        <span aria-hidden="true"></span>
+        <span aria-hidden="true"></span>
+        <span aria-hidden="true"></span>
+      </a>
     </div>
-  </div>
-</nav>
+
+    <div id="openSecNavbar" class="navbar-menu">
+      <div class="navbar-end">
+        <a class="navbar-item is-success is-size-6 has-text-light button m-2"> View Cameras</a>
+        <a class="navbar-item is-link is-size-6 has-text-light button m-2"> View Intruders</a>
+        <a
+          href="{% url 'manage_cameras' %}"
+          class="navbar-item is-info is-size-6 has-text-light button m-2"
+        >
+          Manage Cameras</a
+          >
+          <a
+            href="{% url 'logout' %}"
+            class="navbar-item is-danger is-size-6 has-text-light button m-2"
+          >
+            Log Out</a
+            >
+          </div>
+        </div>
+      </nav>
 {% endif %}
