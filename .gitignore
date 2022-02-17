@@ -9,6 +9,7 @@ inputs.txt
 ssd/
 .vidgear/
 main.py.lprof
+staticfiles/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
