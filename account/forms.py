@@ -1,4 +1,3 @@
-from django import forms
 from django.contrib.auth.forms import (
     AuthenticationForm,
     UserChangeForm,
@@ -8,13 +7,23 @@ from django.contrib.auth.forms import (
 from .models import OpenSecUser
 
 
-class OpenSecUserCreationForm(UserCreationForm):
+class OpenSecRegistrationForm(UserCreationForm):
     class Meta:
         model = OpenSecUser
         fields = (
             "username",
             "email",
         )
+
+    def __init__(self, *args, **kwargs):
+        super(OpenSecRegistrationForm, self).__init__(*args, **kwargs)
+        for visible in self.visible_fields():
+            visible.field.widget.attrs["class"] = "input"
+
+        self.fields["username"].widget.attrs["placeholder"] = "Username"
+        self.fields["email"].widget.attrs["placeholder"] = "name@domain.com"
+        self.fields["password1"].widget.attrs["placeholder"] = "Password"
+        self.fields["password2"].widget.attrs["placeholder"] = "Confirm Password"
 
 
 class OpenSecUserChangeForm(UserChangeForm):
@@ -36,11 +45,8 @@ class OpenSecLoginForm(AuthenticationForm):
 
     def __init__(self, *args, **kwargs):
         super(OpenSecLoginForm, self).__init__(*args, **kwargs)
-        # for visible in self.visible_fields():
-        #     visible.field.widget.attrs["class"] = "input"
-        #     visible.field.widget.attrs["placeholder"] = "Username"
-        self.fields["username"].widget.attrs["class"] = "input"
-        self.fields["password"].widget.attrs["class"] = "input"
+        for visible in self.visible_fields():
+            visible.field.widget.attrs["class"] = "input"
 
         self.fields["username"].widget.attrs["placeholder"] = "Username"
         self.fields["password"].widget.attrs["placeholder"] = "Password"
