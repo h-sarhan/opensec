@@ -1,9 +1,15 @@
-{% extends 'base.html' %} {% block title %}Log In{% endblock title %} {% block content %}
-<section class="hero is-fullheight is-dark">
+{% extends 'base.html' %} 
+{% block title %}Log In{% endblock title %} 
+{% load static %} 
+{% block content %}
+<section class="hero is-fullheight has-background-grey-darker">
   <div class="hero-body">
     <div class="container has-text-centered">
       <div class="columns is-centered">
         <div class="column is-half">
+          <figure class="image is-4by1 mb-6">
+            <img src="{% static 'opensec logo.png' %}" class="has-ratio" width="508" height="125" />
+          </figure>
           <div class="box">
             <h1 class="title has-text-dark">Welcome to OpenSec</h1>
             <hr class="is-dark" />

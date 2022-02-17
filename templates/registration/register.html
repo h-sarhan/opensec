@@ -1,14 +1,14 @@
-{% extends 'base.html' %} {% block title %}Registration{% endblock title %} {% block content %}
-<!-- <h2>Register</h2> -->
-<!-- <form method="post">
-  {% csrf_token %} {{ form.as_p }}
-  <button type="submit">Register</button>
-</form> -->
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Registration{% endblock title %} {% block content %}
 <section class="hero is-fullheight is-dark">
   <div class="hero-body">
     <div class="container has-text-centered">
       <div class="columns is-centered">
         <div class="column is-half">
+          <figure class="image is-4by1 mb-6">
+            <img src="{% static 'opensec logo.png' %}" class="has-ratio" width="508" height="125" />
+          </figure>
           <div class="box">
             <h1 class="title has-text-dark">Registration</h1>
             <hr class="is-dark" />

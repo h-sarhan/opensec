@@ -56,7 +56,7 @@ ROOT_URLCONF = "django_config.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [str(BASE_DIR.joinpath("templates"))],
+        "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -129,3 +129,15 @@ AUTH_USER_MODEL = "account.OpenSecUser"
 
 LOGIN_REDIRECT_URL = "manage_cameras"
 LOGOUT_REDIRECT_URL = "login"
+
+# Static files setup
+STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_DIRS = [
+    BASE_DIR / "static",
+]
+STATICFILES_STORAGE = "django.contrib.staticfiles.storage.StaticFilesStorage"
+
+# Media/stream files setup
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "stream_files"
