@@ -13,7 +13,7 @@ class ManageCamerasView(ListView):
 
 class CameraView(DetailView):
     model = Camera
-    template_name = "camera.html"
+    template_name = "view_camera.html"
     context_object_name = "camera"
 
 

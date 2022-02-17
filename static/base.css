@@ -2,3 +2,12 @@
   height: 89vmin;
   box-sizing: border-box;
 }
+
+#video {
+  width: 100%;
+  height: 100%;
+}
+
+.navbar-item img {
+  max-height: 2.3rem;
+}

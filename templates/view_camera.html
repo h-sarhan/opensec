@@ -3,5 +3,32 @@
 
 {% block title %} {{camera.name}} {% endblock title %}
 
-{% block content}
+{% block content %}
+<div class="columns">
+  {% include 'sidebar.html' %}
+  <div class="column is-9">
+    <div class="container pt-6">
+      <h1 class="title has-text-centered">{{camera.name}} Live Feed</h1>
+      <div class="video-container">
+          <video id="video" 
+                  class="has-ratio" 
+                  autoplay="true" 
+                  controls=""
+                  playsinline="true" 
+                  muted="true">
+          </video>
+          {% if camera.is_ptz %}
+            <div class="box">
+              <div class="buttons is-centered">
+                <button class="button">Up</button>
+                <button class="button">Down</button>
+                <button class="button">Left</button>
+                <button class="button">Right</button>
+              </div>
+            </div>
+          {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock content %}

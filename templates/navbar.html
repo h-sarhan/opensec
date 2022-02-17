@@ -7,9 +7,9 @@
     aria-label="main navigation"
   >
     <div class="navbar-brand">
-      <figure class="navbar-item image" href="">
+      <a class="navbar-item image" href="">
         <img src="{% static 'opensec logo.png' %}" />
-      </figure>
+      </a>
       <a
         role="button"
         class="navbar-burger"
@@ -25,7 +25,7 @@
 
     <div id="openSecNavbar" class="navbar-menu">
       <div class="navbar-end">
-        <a class="navbar-item is-success is-size-6 has-text-light button m-2"> View Cameras</a>
+        <a class="navbar-item is-success is-size-6 has-text-light button m-2"> View All Cameras</a>
         <a class="navbar-item is-link is-size-6 has-text-light button m-2"> View Intruders</a>
         <a
           href="{% url 'manage_cameras' %}"

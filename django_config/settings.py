@@ -25,7 +25,7 @@ SECRET_KEY = "django-insecure-sk!7(2y*t!u!z@!qu5%jn1&4d@sd3ujflz(llbnog#e14wi$yx
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["*"]
 
 
 # Application definition
@@ -64,6 +64,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "opensec.context_processors.camera_list_processor",
             ],
         },
     },

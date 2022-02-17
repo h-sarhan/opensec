@@ -10,12 +10,17 @@
     <link rel="stylesheet" href="{% static 'bulma.min.css' %}" />
     <link rel="stylesheet" href="{% static 'base.css' %}" />
   </head>
-  <body class="has-navbar-fixed-top">
-    {% include 'navbar.html' %}
-    <main>
-      {% block content %}
-      {% endblock content %}
-    </main>
-    <script src="{% static 'burgerMenuCollapse.js' %}"></script>
-  </body>
+  {% if user.is_authenticated %}
+    <body class="has-navbar-fixed-top">
+  {% else %}
+    <body>
+  {% endif %}
+
+  {% include 'navbar.html' %}
+  <main>
+    {% block content %}
+    {% endblock content %}
+  </main>
+  <script src="{% static 'burgerMenuCollapse.js' %}"></script>
+</body>
 </html>
