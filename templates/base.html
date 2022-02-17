@@ -8,31 +8,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>OpenSec | {% block title %}{% endblock title %}</title>
     <link rel="stylesheet" href="{% static 'bulma.min.css' %}" />
+    <link rel="stylesheet" href="{% static 'base.css' %}">
   </head>
   <body>
-    {% if user.is_authenticated %}
-    <nav class="navbar is-dark has-shadow is-spaced" role="navigation" aria-label="main navigation">
-      <div class="navbar-brand">
-        <a class="navbar-item" href="">
-          <img src="{% static 'opensec logo.png' %}" width="125" height="31" />
-        </a>
-      </div>
-
-      <div id="openSecNavbar" class="navbar-menu">
-        <div class="navbar-end">
-          <a class="navbar-item is-success is-size-6 has-text-light button mx-3"> View Cameras</a>
-          <a class="navbar-item is-link is-size-6 has-text-light button mx-3"> View Intruders</a>
-          <a class="navbar-item is-info is-size-6 has-text-light button mx-3"> Manage Cameras</a>
-          <a
-            href="{% url 'logout' %}"
-            class="navbar-item is-danger is-size-6 has-text-light button ml-3"
-          >
-            Log Out</a
-          >
-        </div>
-      </div>
-    </nav>
-    {% endif %}
+    {% include 'navbar.html' %}
     <main>{% block content %} {% endblock content %}</main>
+    <script src="{% static 'burgerMenuCollapse.js' %}"></script>
   </body>
 </html>
