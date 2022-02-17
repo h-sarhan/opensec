@@ -5,7 +5,12 @@ from django.utils import timezone
 
 class Camera(models.Model):
     name = models.CharField("Camera name", max_length=200, blank=False, null=False)
-    rtsp_url = models.URLField("RTSP URL", null=False, blank=False, max_length=200)
+    rtsp_url = models.CharField(
+        "RTSP URL",
+        null=False,
+        blank=False,
+        max_length=200,
+    )
     is_onvif = models.BooleanField("ONVIF compliant?", default=False)
     is_ptz = models.BooleanField("Has PTZ controls?", default=False)
     is_active = models.BooleanField("Is the camera currently active?", default=False)
@@ -19,6 +24,9 @@ class Camera(models.Model):
         "Source video framerate", null=True, blank=True
     )
     date_added = models.DateTimeField("Camera addition date", default=timezone.now)
+    snapshot = models.ImageField(
+        "Camera snapshot", upload_to="camera_snaps", blank=True
+    )
 
     user = models.ForeignKey(OpenSecUser, on_delete=models.CASCADE)
 

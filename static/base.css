@@ -1,3 +1,4 @@
 .sidebar {
-  height: 85vh;
+  height: 89vmin;
+  box-sizing: border-box;
 }
