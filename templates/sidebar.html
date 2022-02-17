@@ -1,16 +1,17 @@
 <div class="column is-2 mt-5">
-  <aside class="sidebar menu has-background-grey-light pt-5 pl-3">
+  <aside class="sidebar menu has-background-grey-light pt-5 px-3">
     <p class="menu-label is-size-4 has-text-dark has-text-centered">Cameras</p>
     <ul class="menu-list">
       {% if cameras %}
         {% for camera in cameras %}
           <li><a class="is-size-4 has-text-dark" href="{% url 'view_camera' camera.pk %}">{{camera.name}}</a></li>
         {% endfor %}
-      {% else %}
+        <hr style="border-top: 1px solid black;">
+        <li><a href="" class="is-size-4 has-text-dark">View all cameras</a></li>
+        {% else %}
         <li class="is-size-4 has-text-dark">No cameras available</li>
+        {% endif %}
         <li><a href="" class="is-size-4 has-text-dark">Add a camera</a></li>
-      {% endif %}
     </ul>
-
   </aside>
 </div>

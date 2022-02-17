@@ -6,10 +6,10 @@
 {% block content %}
 <div class="columns">
   {% include 'sidebar.html' %}
-  <div class="column is-9">
+  <div class="column is-10">
     <div class="container pt-6">
       <h1 class="title has-text-centered">{{camera.name}} Live Feed</h1>
-      <div class="video-container">
+      <div class="video-container ">
           <video id="video" 
                   class="has-ratio" 
                   autoplay="true" 
@@ -18,17 +18,18 @@
                   muted="true">
           </video>
           {% if camera.is_ptz %}
-            <div class="box">
-              <div class="buttons is-centered">
-                <button class="button">Up</button>
-                <button class="button">Down</button>
-                <button class="button">Left</button>
-                <button class="button">Right</button>
+            <div class="ptz-controls box">
+              <div class="has-text-centered is-size-5">Move the camera (Experimental)</div>
+              <div class="buttons">
+                <button class="button up-btn">Up</button>
+                <button class="button down-btn">Down</button>
+                <button class="button left-btn">Left</button>
+                <button class="button right-btn">Right</button>
               </div>
             </div>
           {% endif %}
       </div>
-    </div>
+    </d is-centerediv>
   </div>
 </div>
 {% endblock content %}
