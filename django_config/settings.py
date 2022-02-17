@@ -128,4 +128,4 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "account.OpenSecUser"
 
 LOGIN_REDIRECT_URL = "manage_cameras"
-LOGOUT_REDIRECT_URL = "registration/login"
+LOGOUT_REDIRECT_URL = "login"

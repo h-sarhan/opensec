@@ -9,34 +9,34 @@
   </head>
   <body>
     {% if user.is_authenticated %}
-      <nav class="navbar is-dark has-shadow is-spaced" role="navigation" aria-label="main navigation">
-        <div class="navbar-brand">
-          <a class="navbar-item" href="https://bulma.io">
-            <img src="https://bulma.io/images/bulma-logo.png" width="112" height="28">
-          </a>
-      
-          <!-- <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false" data-target="openSecNavbar">
+    <nav class="navbar is-dark has-shadow is-spaced" role="navigation" aria-label="main navigation">
+      <div class="navbar-brand">
+        <a class="navbar-item" href="https://bulma.io">
+          <img src="https://bulma.io/images/bulma-logo.png" width="112" height="28" />
+        </a>
+
+        <!-- <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false" data-target="openSecNavbar">
             <span aria-hidden="true"></span>
             <span aria-hidden="true"></span>
             <span aria-hidden="true"></span>
           </a> -->
-        </div>
+      </div>
 
-        <div id="openSecNavbar" class="navbar-menu">
-
-          <div class="navbar-end">
-            <a class="navbar-item is-success is-size-5 has-text-light button mx-3"> View Cameras</a>
-            <a class="navbar-item is-link is-size-5 has-text-light button mx-3"> View Intruders</a>
-            <a class="navbar-item is-info is-size-5 has-text-light button mx-3"> Manage Cameras</a>
-            <a href="{% url 'logout' %}" class="navbar-item is-danger is-size-5 has-text-light button ml-3"> Log Out</a>
-            
-          </div>
+      <div id="openSecNavbar" class="navbar-menu">
+        <div class="navbar-end">
+          <a class="navbar-item is-success is-size-6 has-text-light button mx-3"> View Cameras</a>
+          <a class="navbar-item is-link is-size-6 has-text-light button mx-3"> View Intruders</a>
+          <a class="navbar-item is-info is-size-6 has-text-light button mx-3"> Manage Cameras</a>
+          <a
+            href="{% url 'logout' %}"
+            class="navbar-item is-danger is-size-6 has-text-light button ml-3"
+          >
+            Log Out</a
+          >
         </div>
-      </nav>
+      </div>
+    </nav>
     {% endif %}
-    <main>
-      {% block content %}
-      {% endblock content %}
-    </main>
+    <main>{% block content %} {% endblock content %}</main>
   </body>
 </html>
