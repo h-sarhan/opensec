@@ -14,11 +14,11 @@
             </figure>
             <div class="box">
               <h1 class="title has-text-dark">Welcome to OpenSec</h1>
-              <hr class="is-dark" />
+              <hr />
               <form method="post">
                 {% csrf_token %}
                 <div class="columns is-centered">
-                  <div class="form-element column is-half">
+                  <div class="login column is-half">
                     <label class="label has-text-grey-dark">Username</label>
                     <div class="control">{{ form.username }}</div>
 

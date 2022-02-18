@@ -1,8 +1,9 @@
 from django.conf import settings
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
 from django.views.generic import DetailView, ListView, TemplateView
 from django.views.generic.edit import CreateView, DeleteView, UpdateView
 
+from .forms import EditCameraForm
 from .models import Camera
 
 
@@ -20,12 +21,12 @@ class CameraView(DetailView):
 
 class EditCameraView(UpdateView):
     model = Camera
-    fields = (
-        "name",
-        "rtsp_url",
-    )
+    form_class = EditCameraForm
     template_name = "edit_camera.html"
     context_object_name = "camera"
+
+    def get_success_url(self):
+        return reverse("manage_cameras")
 
 
 class DeleteCameraView(DeleteView):

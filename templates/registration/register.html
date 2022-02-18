@@ -14,22 +14,30 @@
             </figure>
             <div class="box">
               <h1 class="title has-text-dark">Registration</h1>
-              <hr class="is-dark" />
+              <hr />
               <form method="post">
                 {% csrf_token %}
                 <div class="columns is-centered">
-                  <div class="form-element column is-half">
-                    <label class="label has-text-grey-dark">Username</label>
-                    <div class="control">{{ form.username }}</div>
+                  <div class="field column is-half">
+                    <div class="control">
+                      <label class="label has-text-grey-dark">Username</label>
+                      {{ form.username }}
+                    </div>
 
-                    <label class="label has-text-grey-dark mt-5">Email</label>
-                    <div class="control">{{ form.email }}</div>
+                    <div class="control">
+                      <label class="label has-text-grey-dark mt-5">Email</label>
+                      {{ form.email }}
+                    </div>
 
-                    <label class="label has-text-grey-dark mt-5">Password</label>
-                    <div class="control">{{ form.password1 }}</div>
+                    <div class="control">
+                      <label class="label has-text-grey-dark mt-5">Password</label>
+                      {{ form.password1 }}
+                    </div>
 
-                    <label class="label has-text-grey-dark mt-5">Confirm Password</label>
-                    <div class="control">{{ form.password2 }}</div>
+                    <div class="control">
+                      <label class="label has-text-grey-dark mt-5">Confirm Password</label>
+                      {{ form.password2 }}
+                    </div>
                   </div>
                 </div>
 
