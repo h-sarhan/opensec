@@ -7,7 +7,7 @@
           <li><a class="is-size-4 has-text-dark" href="{% url 'view_camera' camera.pk %}">{{camera.name}}</a></li>
         {% endfor %}
         <hr style="border-top: 1px solid black;">
-        <li><a href="" class="is-size-4 has-text-dark">View all cameras</a></li>
+        <li><a href="{% url 'view_all_cameras' %}" class="is-size-4 has-text-dark">View all cameras</a></li>
         {% else %}
         <li class="is-size-4 has-text-dark">No cameras available</li>
         {% endif %}

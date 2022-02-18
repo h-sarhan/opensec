@@ -1,5 +1,6 @@
+from django.conf import settings
 from django.urls import reverse_lazy
-from django.views.generic import DetailView, ListView
+from django.views.generic import DetailView, ListView, TemplateView
 from django.views.generic.edit import CreateView, DeleteView, UpdateView
 
 from .models import Camera
@@ -36,3 +37,12 @@ class DeleteCameraView(DeleteView):
 
 class AddCameraView(CreateView):
     pass
+
+
+class AllCameraView(TemplateView):
+    template_name = "view_all_cameras.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["live_feed"] = f"{settings.MEDIA_URL}stream/playlist.m3u8"
+        return context
