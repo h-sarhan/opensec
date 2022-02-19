@@ -214,6 +214,7 @@ class VideoSource:
             self._vid_cap_open = True
             self._vid_cap_thread = Thread(target=self._update_frame)
             self._vid_cap_thread.start()
+        return self
 
     def read(self, resize_frame=None):
 

@@ -1,118 +1,94 @@
-import os
-import time
-from threading import Thread
-
 import config
+import cv2 as cv
 import numpy as np
-from vidgear.gears.asyncio import WebGear_RTC
+from vidgear.gears.asyncio import WebGear_RTC, webgear_rtc
+from vidgear.gears.helper import reducer
+
+# Lower the fps of the webRTC stream
+webgear_rtc.VIDEO_PTIME = 1 / config.FPS
 
 
-class LiveFeedProducer:
-
-    reduce_amount = 0.4
-
-    def __init__(self, sources):
-        self.sources = sources
+class LiveFeedFrameProducer:
+    def __init__(self, frame_reduction_amount):
+        self.frame_reduction_amount = frame_reduction_amount
+        self._source = None
         self.running = True
-        self._live_feed_shape = (
-            int(360 * (1 - self.reduce_amount)) * 2,
-            int(640 * (1 - self.reduce_amount)) * 2,
+        self._placeholder_frame = np.empty((720, 1280, 3), dtype=np.uint8)
+
+        cv.putText(
+            self._placeholder_frame,
+            "no input",
+            (200, 200),
+            cv.FONT_HERSHEY_DUPLEX,
             3,
+            (0, 255, 0),
         )
-        self._single_frame_shape = (
-            int(360 * (1 - self.reduce_amount)),
-            int(640 * (1 - self.reduce_amount)),
-            3,
-        )
-        self._live_feed_frame = np.zeros(self._live_feed_shape, np.uint8)
-        # TODO: Draw text on blank frame
-        self._blank_frame = np.zeros(self._single_frame_shape, np.uint8)
-        self._frame_count = 0
-        self._current_frame = None
-        Thread(target=self._update_frame).start()
+
+    @property
+    def source(self):
+        return self._source
+
+    @source.setter
+    def source(self, new_source):
+        print(f"NEW SOURCE {new_source}")
+        self._source = new_source
 
     def read(self):
+        if self._source is None:
+            return self._placeholder_frame
 
-        return self._current_frame
+        frame = self._source.read()
+        if frame is None:
+            return self._placeholder_frame
 
-    def _update_frame(self):
-        # TODO: Make this work with a variable number of sources
+        if self.frame_reduction_amount is not None:
+            return reducer(
+                frame,
+                percentage=self.frame_reduction_amount,
+                interpolation=cv.INTER_NEAREST,
+            )
 
-        while self.running:
-            frames = []
-            for source in self.sources:
-                frame_height, frame_width = self._single_frame_shape[:2]
-                frame = source.read(resize_frame=(frame_width, frame_height))
-                if frame is None:
-                    print("Frame is none")
-                    frames.append(self._blank_frame)
-                else:
-                    frames.append(frame)
-
-            frame_height, frame_width = self._single_frame_shape[:2]
-            self._live_feed_frame[:frame_height, :frame_width] = frames[0]
-            self._live_feed_frame[:frame_height, frame_width:] = frames[1]
-            self._live_feed_frame[frame_height:, :frame_width] = frames[2]
-            self._live_feed_frame[frame_height:, frame_width:] = frames[3]
-            self._current_frame = self._live_feed_frame
-            time.sleep(1 / config.FPS)
-
-        self._current_frame = None
+        return frame
 
     def stop(self):
-        """
-        TODO
-        """
         self.running = False
+        if not self._source is None:
+            print("LIVE FEED STOPPED")
 
 
 class LiveFeed:
-    def __init__(self, sources, stream_directory="stream"):
-        self.sources = sources
-        self.stream_directory = stream_directory
-        self.live_feed_options = {
-            "custom_stream": LiveFeedProducer(self.sources),
+    def __init__(self, frame_reduction_amount=40):
+        self._frame_producer = LiveFeedFrameProducer(frame_reduction_amount)
+        self._live_feed_options = {
+            "custom_stream": self._frame_producer,
             "custom_data_location": "./",
             "enable_live_broadcast": True,
-            "frame_size_reduction": 0,
+            "frame_size_reduction": 40,
         }
-        self.stream = WebGear_RTC(logging=True, **self.live_feed_options)
-
+        self._stream = WebGear_RTC(**self._live_feed_options)
         self._streaming = False
-        self._server = None
 
     @property
     def is_streaming(self):
+        return self._streaming
 
-        all_sources_inactive = all(not source.is_active for source in self.sources)
-        if not self._streaming or all_sources_inactive:
-            return False
-        return True
+    @property
+    def source(self):
+        return self._frame_producer.source
 
-    # @profile
-    def start_streaming_live_feed(self):
+    @source.setter
+    def source(self, new_source):
+        self._frame_producer.source = new_source
 
-        for source in self.sources:
-            source.start()
-
-        # Give the sources some time to read frames
-        time.sleep(5)
-        # uvicorn.run(self.stream(), host="0.0.0.0", port=8000)
-
-    def start(self):
-
+    @property
+    def stream_app(self):
         self._streaming = True
-        Thread(target=self.start_streaming_live_feed).start()
+        return self._stream
 
     def stop(self):
-
-        print("Stopping streaming server")
         if self._streaming:
+            print("Stopping streaming server")
             self._streaming = False
-            self.stream.shutdown()
-
-    def _make_dirs(self):
-        for source in self.sources:
-            dir_name = f"stream/{source.name}"
-            if not os.path.exists(dir_name):
-                os.mkdir(dir_name)
+            self._stream.shutdown()
+        else:
+            print("Stream is already stopped")

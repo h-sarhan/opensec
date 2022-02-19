@@ -1,6 +1,8 @@
 {
   "python.formatting.provider": "black",
   "cSpell.words": [
+    "aiohttp",
+    "aiortc",
     "avdec",
     "bgsegm",
     "denoised",
@@ -36,6 +38,7 @@
     "OPENCV",
     "playsinline",
     "Popen",
+    "PTIME",
     "RETR",
     "rtph",
     "rtsp",
@@ -75,9 +78,6 @@
   "python.terminal.executeInFileDir": true,
   "autoDocstring.docstringFormat": "numpy",
   "autoDocstring.startOnNewLine": true,
-  "python.testing.pytestArgs": [
-    "tests"
-  ],
   "python.linting.pylintArgs": [
     "--extension-pkg-whitelist=cv2",
     "--generated-members=cv.bgsegm.*, cv.*",
@@ -86,5 +86,8 @@
     "--load-plugins",
     "pylint_django",
     "--django-settings-module=django_config.settings",
+  ],
+  "python.testing.pytestArgs": [
+    "tests"
   ],
 }
