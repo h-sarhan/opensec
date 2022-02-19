@@ -1,0 +1,53 @@
+.sidebar {
+  height: 89vmin;
+  box-sizing: border-box;
+}
+
+#video {
+  width: 100%;
+}
+.video-container {
+  display: flex;
+}
+
+.ptz-controls {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 30px;
+}
+
+
+.left-btn {
+  /* right: 30px; */
+  left: 1rem;
+  bottom: 2rem;
+}
+
+.right-btn {
+  left: 9rem;
+  bottom: 5.2rem;
+  
+}
+.up-btn {
+  left: 5.3rem;
+  
+}
+.down-btn {
+  left: 4.5rem;
+  top: 4.8rem;
+}
+
+
+.ptz-controls .buttons {
+  display: block;
+}
+
+.ptz-controls .buttons button{
+  display: block;
+  position: relative;
+}
+
+.navbar-item img {
+  max-height: 2.3rem;
+}

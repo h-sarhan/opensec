@@ -9,13 +9,21 @@ imageio = "*"
 numpy = "*"
 python-dotenv = "*"
 opencv-contrib-python = "*"
-simplejpeg = "*"
+django = "*"
+pillow = "*"
+uvicorn = "*"
+gunicorn = "*"
 
 [dev-packages]
 pytest = "*"
 pylint = "*"
 black = "*"
 line-profiler = "*"
+pylint-django = "*"
+djhtml = "*"
 
 [requires]
 python_version = "3.9"
+
+[scripts]
+serve = "uvicorn django_config.asgi:application --host 0.0.0.0 --port 8000"

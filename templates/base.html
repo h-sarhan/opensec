@@ -1,0 +1,26 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpenSec | {% block title %}{% endblock title %}</title>
+    <link rel="stylesheet" href="{% static 'css/bulma.min.css' %}" />
+    <link rel="stylesheet" href="{% static 'css/base.css' %}" />
+  </head>
+  {% if user.is_authenticated %}
+    <body class="has-navbar-fixed-top">
+  {% else %}
+    <body>
+  {% endif %}
+
+  {% include 'navbar.html' %}
+  <main>
+    {% block content %}
+    {% endblock content %}
+  </main>
+  <script src="{% static 'js/burgerMenuCollapse.js' %}"></script>
+</body>
+</html>

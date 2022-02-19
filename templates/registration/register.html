@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Registration{% endblock title %}
+
+{% block content %}
+  <section class="hero is-fullheight is-dark">
+    <div class="hero-body">
+      <div class="container has-text-centered">
+        <div class="columns is-centered">
+          <div class="column is-half">
+            <figure class="image is-4by1 mb-6">
+              <img src="{% static 'images/opensec logo.png' %}" class="has-ratio" width="508" height="125" />
+            </figure>
+            <div class="box">
+              <h1 class="title has-text-dark">Registration</h1>
+              <hr />
+              <form method="post">
+                {% csrf_token %}
+                <div class="columns is-centered">
+                  <div class="field column is-half">
+                    <div class="control">
+                      <label class="label has-text-grey-dark">Username</label>
+                      {{ form.username }}
+                    </div>
+
+                    <div class="control">
+                      <label class="label has-text-grey-dark mt-5">Email</label>
+                      {{ form.email }}
+                    </div>
+
+                    <div class="control">
+                      <label class="label has-text-grey-dark mt-5">Password</label>
+                      {{ form.password1 }}
+                    </div>
+
+                    <div class="control">
+                      <label class="label has-text-grey-dark mt-5">Confirm Password</label>
+                      {{ form.password2 }}
+                    </div>
+                  </div>
+                </div>
+
+                <div class="control">
+                  <button type="submit" class="button is-success my-4 mx-4">Register</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+{% endblock content %}
