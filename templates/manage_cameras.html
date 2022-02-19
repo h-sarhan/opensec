@@ -5,7 +5,7 @@
 
 {%block content %}
   <div class="container pt-5">
-    <div class="columns is-multiline is-centered mx-6 my-4">
+    <div class="columns is-multiline is-centered mx-6 my-4 is-vcentered">
       {% for camera in cameras %}
         <div class="column is-3">
           <div class="card">
@@ -48,7 +48,7 @@
                 <div class="container">
                   <div class="buttons is-centered">
                     <a href="{% url 'edit_camera' camera.pk %}" class="button is-info">Edit</a>
-                    <a class="button is-danger">Delete</a>
+                    <a href="{% url 'delete_camera' camera.pk %}" class="button is-danger">Delete</a>
                   </div>
                 </div>
               </div>
@@ -59,7 +59,7 @@
       <div class="column is-3">
         <div class="card">
           <div class="card-image">
-            <a class="image is-16by9">
+            <a href="{% url 'add_camera' %}" class="image is-16by9">
               <img src="{% static 'images/blue-plus-icon-9.jpg' %}" alt="Add a camera" />
             </a>
           </div>

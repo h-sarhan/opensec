@@ -1,4 +1,3 @@
-from account.models import OpenSecUser
 from django.db import models
 from django.utils import timezone
 
@@ -27,8 +26,6 @@ class Camera(models.Model):
     snapshot = models.ImageField(
         "Camera snapshot", upload_to="camera_snaps", blank=True
     )
-
-    user = models.ForeignKey(OpenSecUser, on_delete=models.CASCADE)
 
     def __str__(self):
         return self.name
