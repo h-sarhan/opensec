@@ -1,6 +1,5 @@
-from django.conf import settings
 from django.urls import reverse
-from django.views.generic import DetailView, ListView, TemplateView
+from django.views.generic import DetailView, ListView
 from django.views.generic.edit import CreateView, DeleteView, UpdateView
 
 from .forms import AddCameraForm, EditCameraForm
@@ -46,12 +45,3 @@ class AddCameraView(CreateView):
 
     def get_success_url(self):
         return reverse("manage_cameras")
-
-
-class AllCameraView(TemplateView):
-    template_name = "view_all_cameras.html"
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["live_feed"] = f"{settings.MEDIA_URL}stream/playlist.m3u8"
-        return context
