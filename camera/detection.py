@@ -23,11 +23,7 @@ NOISE_KERNEL = cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3))
 # TODO: WRITE TESTS
 
 
-class IntuderRecorder:
-    """
-    TODO
-    """
-
+class IntruderRecorder:
     def __init__(self, detection_sources, recording_directory, max_stored_frames=80):
         self.sources = detection_sources
         self.recordings_directory = recording_directory
@@ -39,15 +35,11 @@ class IntuderRecorder:
         self._setup()
 
     def get_num_frames_recorded(self, source):
-        """
-        TODO
-        """
+
         return len(self._stored_frames[source.name])
 
     def add_frame(self, frame, source):
-        """
-        TODO
-        """
+
         if self._start_times[source.name] is None:
             current_date_time = datetime.now().strftime("%Y_%m_%d %Hh %Mm %Ss")
             self._start_times[source.name] = current_date_time
@@ -61,9 +53,7 @@ class IntuderRecorder:
             writer.write(frame)
 
     def save(self, source, gif=True, thumb=True):
-        """
-        TODO
-        """
+
         writer = self._video_writers[source.name]
         writer.close()
         video_path = self._rename_video(source)
@@ -92,9 +82,7 @@ class IntuderRecorder:
         return paths
 
     def _rename_video(self, source):
-        """
-        TODO
-        """
+
         videos_directory = f"{self.recordings_directory}/videos"
         base_name = f"{videos_directory}/{source.name}"
         old_file_path = f"{base_name}/intruder.mp4"
@@ -110,9 +98,7 @@ class IntuderRecorder:
         return new_file_path
 
     def _save_thumb(self, source):
-        """
-        TODO
-        """
+
         thumbnails_directory = f"{self.recordings_directory}/thumbnails"
         base_dir = f"{thumbnails_directory}/{source.name}"
         thumb_name = self._start_times[source.name]
@@ -126,9 +112,7 @@ class IntuderRecorder:
         return None
 
     def _save_gif(self, source):
-        """
-        TODO
-        """
+
         gif_frames = []
         stored_frames = self._stored_frames[source.name]
         for frame_idx, frame in enumerate(stored_frames):
@@ -154,9 +138,7 @@ class IntuderRecorder:
         return None
 
     def _setup(self):
-        """
-        TODO
-        """
+
         self._make_paths()
         self._make_video_writers()
         for source in self.sources:
@@ -192,10 +174,6 @@ class IntuderRecorder:
 
 
 class DetectionSource:
-    """
-    TODO
-    """
-
     def __init__(self, name, source):
         self.name = name
         self.source = source
@@ -209,29 +187,21 @@ class DetectionSource:
 
     @property
     def is_active(self):
-        """
-        TODO
-        """
+
         return self.source.is_active
 
     def start(self):
-        """
-        TODO
-        """
+
         self.source.start()
 
     def stop(self):
-        """
-        TODO
-        """
+
         if self.is_active:
             self.conseq_motion_frames = 0
             self.source.stop()
 
     def read(self, resize_frame=None):
-        """
-        TODO
-        """
+
         frame = self.source.read(resize_frame)
         # read_attempts = 0
         # while frame is None and read_attempts < 3:
@@ -245,9 +215,7 @@ class DetectionSource:
         return frame
 
     def get_foreground_mask(self, frame):
-        """
-        TODO
-        """
+
         foreground_mask = self._bg_subtractor.apply(frame)
 
         denoised_foreground_mask = cv.morphologyEx(
@@ -256,9 +224,7 @@ class DetectionSource:
         return cv.dilate(denoised_foreground_mask, None, iterations=3)
 
     def find_contours(self, foreground_mask, display_frame=None):
-        """
-        TODO
-        """
+
         detection_mode = cv.RETR_EXTERNAL
         detection_method = cv.CHAIN_APPROX_SIMPLE
 
@@ -267,9 +233,7 @@ class DetectionSource:
         return self.filter_contours(contours, display_frame)
 
     def filter_contours(self, contours, display_frame=None):
-        """
-        TODO
-        """
+
         filtered_contours = []
 
         # Maybe vectorize this
@@ -291,9 +255,7 @@ class DetectionSource:
 
     @staticmethod
     def _draw_bounding_boxes(display_frame, contour):
-        """
-        TODO
-        """
+
         # Get the bounding rectangle from the contour
         x_coord, y_coord, width, height = cv.boundingRect(contour)
 
@@ -308,10 +270,6 @@ class DetectionSource:
 
 
 class IntruderDetector:
-    """
-    TODO
-    """
-
     def __init__(
         self,
         detection_sources,
@@ -325,21 +283,17 @@ class IntruderDetector:
         self._max_frames_to_record = num_frames_to_record
 
         self._detection_status = False
-        self._recorder = IntuderRecorder(
+        self._recorder = IntruderRecorder(
             self.detection_sources, recording_directory, num_frames_to_record
         )
 
     def start_sources(self):
-        """
-        TODO
-        """
+
         for source in self.detection_sources:
             source.start()
 
     def get_detection_status(self):
-        """
-        TODO
-        """
+
         all_sources_inactive = all(
             not source.is_active for source in self.detection_sources
         )
@@ -348,9 +302,7 @@ class IntruderDetector:
         return True
 
     def read_frame(self, source: DetectionSource, resize_frame=None):
-        """
-        TODO
-        """
+
         frame = source.read(resize_frame)
 
         if frame is None:
@@ -360,18 +312,14 @@ class IntruderDetector:
 
     @staticmethod
     def update_conseq_frames(source, contours):
-        """
-        TODO
-        """
+
         if IntruderDetector.is_motion_frame(contours):
             source.conseq_motion_frames += 1
         else:
             source.conseq_motion_frames = 0
 
     def detect(self, min_conseq_frames=15):
-        """
-        TODO
-        """
+
         self._detection_status = True
 
         frame_count = 0
@@ -409,9 +357,7 @@ class IntruderDetector:
         self.stop_detection()
 
     def detect_motion_in_frame(self, frame, source):
-        """
-        TODO
-        """
+
         foreground_mask = source.get_foreground_mask(frame)
 
         contours = source.find_contours(foreground_mask, display_frame=frame)
@@ -420,24 +366,18 @@ class IntruderDetector:
 
     @staticmethod
     def is_motion_frame(contours):
-        """
-        TODO
-        """
+
         # If no contours have been found then this is not a motion frame
         return contours is not None and len(contours) != 0
 
     def check_for_intruders(self, frame, source, min_conseq_frames):
-        """
-        TODO
-        """
+
         if source.conseq_motion_frames >= min_conseq_frames:
             print(f"intruder detected at {source.name}")
             self.record_frame(frame, source)
 
     def record_frame(self, frame, source):
-        """
-        TODO
-        """
+
         num_frames_recorded = self._recorder.get_num_frames_recorded(source)
         if num_frames_recorded <= self._max_frames_to_record:
             self._recorder.add_frame(frame, source)
@@ -445,9 +385,7 @@ class IntruderDetector:
             self._save_recordings(source)
 
     def stop_detection(self):
-        """
-        TODO
-        """
+
         self._detection_status = False
 
         for source in self.detection_sources:
@@ -462,14 +400,8 @@ class IntruderDetector:
 
 
 class Intruder:
-    """
-    TODO
-    """
-
     def __init__(self, frames):
-        """
-        TODO
-        """
+
         self.camera_name = None
         self.time_detected = None
         self.intruder_type = None
@@ -481,6 +413,4 @@ class Intruder:
         pass
 
     def _analyze(self):
-        """
-        TODO
-        """
+        pass
