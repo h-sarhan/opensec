@@ -8,9 +8,9 @@ main.py
 inputs.txt
 ssd/
 .vidgear/
+media/camera_snaps
 main.py.lprof
 staticfiles/
-
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

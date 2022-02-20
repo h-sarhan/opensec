@@ -55,6 +55,8 @@ class CameraSource:
             self._camera_thread = Thread(target=self._update_frame)
             self._camera_thread.start()
 
+        return self
+
     def read(self, resize_frame=None):
         """
         TODO
