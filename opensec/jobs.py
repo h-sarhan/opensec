@@ -1,20 +1,20 @@
 import threading
 import time
 
-from camera import CameraManager
+from camera import camera_manager
 from schedule import Scheduler
 
-cam_manager = CameraManager()
 
-
-async def startup_job():
-    await cam_manager.get_cameras()
-    cam_manager.connect_to_sources()
-    cam_manager.update_snapshots()
+async def startup_job(camera_model):
+    print("UPDATING CAMERAS")
+    await camera_manager.update_camera_list(camera_model)
+    print("CONNECTING TO SOURCES")
+    camera_manager.connect_to_sources()
+    camera_manager.update_snapshots()
 
 
 def update_snapshots_job():
-    cam_manager.update_snapshots()
+    camera_manager.update_snapshots()
 
 
 # This allows the schedule module to run jobs in the background

@@ -9,8 +9,10 @@ class OpensecConfig(AppConfig):
 
     def ready(self):
 
+        from opensec.models import Camera
+
         from .jobs import run_jobs_in_background, startup_job
 
         loop = asyncio.get_event_loop()
-        asyncio.run_coroutine_threadsafe(startup_job(), loop)
+        asyncio.run_coroutine_threadsafe(startup_job(Camera), loop)
         run_jobs_in_background()
