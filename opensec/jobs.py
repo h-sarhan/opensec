@@ -5,15 +5,16 @@ from camera import camera_manager
 from schedule import Scheduler
 
 
-async def startup_job(camera_model):
+def startup_job(camera_model):
     print("UPDATING CAMERAS")
-    await camera_manager.update_camera_list(camera_model)
+    camera_manager.update_camera_list(camera_model)
     print("CONNECTING TO SOURCES")
     camera_manager.connect_to_sources()
     camera_manager.update_snapshots()
 
 
 def update_snapshots_job():
+    print("Snapshot updated")
     camera_manager.update_snapshots()
 
 

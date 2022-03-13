@@ -10,8 +10,6 @@ class Camera(models.Model):
         blank=False,
         max_length=200,
     )
-    is_onvif = models.BooleanField("ONVIF compliant?", default=False)
-    is_ptz = models.BooleanField("Has PTZ controls?", default=False)
     is_active = models.BooleanField("Is the camera currently active?", default=False)
     video_height = models.PositiveIntegerField(
         "Source video height", null=True, blank=True

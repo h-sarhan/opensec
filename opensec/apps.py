@@ -1,4 +1,4 @@
-import asyncio
+import os
 
 from django.apps import AppConfig
 
@@ -9,10 +9,12 @@ class OpensecConfig(AppConfig):
 
     def ready(self):
 
-        from opensec.models import Camera
+        if os.environ.get("RUN_MAIN"):
+            from opensec.models import Camera
 
-        from .jobs import run_jobs_in_background, startup_job
+            from .jobs import run_jobs_in_background, startup_job
 
-        loop = asyncio.get_event_loop()
-        asyncio.run_coroutine_threadsafe(startup_job(Camera), loop)
-        run_jobs_in_background()
+            # loop = asyncio.get_event_loop()
+            # asyncio.run_coroutine_threadsafe(startup_job(Camera), loop)
+            startup_job(Camera)
+            run_jobs_in_background()

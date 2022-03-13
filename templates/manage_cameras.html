@@ -23,13 +23,6 @@
                 <div class="media-content">
                   <p class="title is-5 has-text-centered">{{camera.name}}</p>
                   <div class="tags is-centered">
-                    {% if camera.is_onvif %}
-                      <span class="tag is-info is-light is-rounded"> ONVIF Compliant </span>
-                    {% endif %} 
-                    
-                    {% if camera.is_ptz %}
-                      <span class="tag is-info is-light is-rounded"> PTZ Controls </span>
-                    {% endif %} 
                     
                     {% if camera.is_active %}
                       <span class="tag is-success is-light is-rounded"> Active </span>

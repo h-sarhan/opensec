@@ -6,7 +6,7 @@ from .models import Camera
 class EditCameraForm(forms.ModelForm):
     class Meta:
         model = Camera
-        fields = ("name", "rtsp_url", "is_ptz")
+        fields = ("name", "rtsp_url")
 
     def __init__(self, *args, **kwargs):
         super(EditCameraForm, self).__init__(*args, **kwargs)
@@ -22,7 +22,7 @@ class EditCameraForm(forms.ModelForm):
 class AddCameraForm(forms.ModelForm):
     class Meta:
         model = Camera
-        fields = ("name", "rtsp_url", "is_ptz")
+        fields = ("name", "rtsp_url")
 
     def __init__(self, *args, **kwargs):
         super(AddCameraForm, self).__init__(*args, **kwargs)

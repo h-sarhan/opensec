@@ -1,5 +1,4 @@
 import cv2 as cv
-from asgiref.sync import sync_to_async
 from django.conf import settings
 
 from .camera import CameraSource
@@ -10,9 +9,9 @@ class CameraManager:
     def __init__(self):
         self.cameras = []
         self.sources = []
-        self.feed = LiveFeed()
+        # self.feed = LiveFeed()
 
-    @sync_to_async
+    # @sync_to_async
     def update_camera_list(self, camera_model):
         self.cameras = list(camera_model.objects.all())
 
