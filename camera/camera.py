@@ -10,9 +10,7 @@ from vidgear.gears import VideoGear
 
 # TODO: Add logging and error handling
 # TODO: Create BaseSource or Source class
-# TODO: Avoid type checking with isinstance
 # TODO: DOCUMENTATION
-# TODO: WRITE TESTS
 
 
 class CameraSource:
@@ -204,12 +202,10 @@ class VideoSource:
 
     @property
     def is_active(self):
-
         return self._vid_cap_open
 
     def start(self):
-
-        if self._vid_cap_open:
+        if self.is_active:
             print(f"Video source {self.name} is already on")
         else:
             self._vid_cap.start()
@@ -219,7 +215,6 @@ class VideoSource:
         return self
 
     def read(self, resize_frame=None):
-
         if resize_frame and self._current_frame is not None:
             return cv.resize(
                 self._current_frame,
@@ -227,6 +222,14 @@ class VideoSource:
                 cv.INTER_NEAREST,
             )
         return self._current_frame
+
+    def stop(self):
+
+        print(f"Stoping video source {self.name}")
+        if self._vid_cap and self.is_active:
+            self._vid_cap.stop()
+
+        self._vid_cap_open = False
 
     def _update_frame(self):
 
@@ -241,11 +244,3 @@ class VideoSource:
             # Update frame
             self._current_frame = frame
             time.sleep(1 / config.FPS)
-
-    def stop(self):
-
-        print(f"Stoping video source {self.name}")
-        if self._vid_cap and self._vid_cap_open:
-            self._vid_cap.stop()
-
-        self._vid_cap_open = False
