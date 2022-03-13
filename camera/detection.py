@@ -11,9 +11,7 @@ from threading import Thread
 
 import config
 import cv2 as cv
-import imageio
 from vidgear.gears import WriteGear
-from vidgear.gears.helper import reducer
 
 NOISE_KERNEL = cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3))
 
@@ -52,7 +50,7 @@ class IntruderRecorder:
             writer = self._video_writers[source.name]
             writer.write(frame)
 
-    def save(self, source, gif=True, thumb=True):
+    def save(self, source, thumb=True):
 
         writer = self._video_writers[source.name]
         writer.close()
@@ -72,10 +70,6 @@ class IntruderRecorder:
             print("Creating thumbnail")
             thumb_path = self._save_thumb(source)
             paths.append(thumb_path)
-        if gif:
-            print("Creating GIF")
-            gif_path = self._save_gif(source)
-            paths.append(gif_path)
 
         self._start_times[source.name] = None
         self._stored_frames[source.name] = []
@@ -111,32 +105,6 @@ class IntruderRecorder:
                 return thumb_path
         return None
 
-    def _save_gif(self, source):
-
-        gif_frames = []
-        stored_frames = self._stored_frames[source.name]
-        for frame_idx, frame in enumerate(stored_frames):
-            if frame_idx % 4 != 0:
-                continue
-            rgb_frame = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
-            reduced_frame = reducer(
-                rgb_frame, percentage=40, interpolation=cv.INTER_NEAREST
-            )
-            gif_frames.append(reduced_frame)
-
-        gifs_directory = f"{self.recordings_directory}/gifs"
-        base_dir = f"{gifs_directory}/{source.name}"
-        gif_name = self._start_times[source.name]
-        gif_path = f"{base_dir}/{gif_name}.gif"
-        if gif_frames:
-            imageio.mimsave(
-                gif_path, gif_frames, fps=5, subrectangles=True, palettesize=64
-            )
-
-            return gif_path
-
-        return None
-
     def _setup(self):
 
         self._make_paths()
@@ -162,7 +130,6 @@ class IntruderRecorder:
         directories = [
             f"{self.recordings_directory}/videos",
             f"{self.recordings_directory}/thumbnails",
-            f"{self.recordings_directory}/gifs",
         ]
         for directory in directories:
             if not os.path.exists(directory):
@@ -396,7 +363,7 @@ class IntruderDetector:
                 self._save_recordings(source)
 
     def _save_recordings(self, source):
-        Thread(target=self._recorder.save, args=(source, False), daemon=True).start()
+        Thread(target=self._recorder.save, args=(source, False)).start()
 
 
 class Intruder:
