@@ -1,94 +1,81 @@
-import config
-import cv2 as cv
-import numpy as np
-from vidgear.gears.asyncio import WebGear_RTC, webgear_rtc
-from vidgear.gears.helper import reducer
+import os
+import subprocess
+import shutil
+import http
+import socketserver
+from threading import Thread
 
-# Lower the fps of the webRTC stream
-webgear_rtc.VIDEO_PTIME = 1 / config.FPS
-
-
-class LiveFeedFrameProducer:
-    def __init__(self, frame_reduction_amount):
-        self.frame_reduction_amount = frame_reduction_amount
-        self._source = None
-        self.running = True
-        self._placeholder_frame = np.empty((720, 1280, 3), dtype=np.uint8)
-
-        cv.putText(
-            self._placeholder_frame,
-            "no input",
-            (200, 200),
-            cv.FONT_HERSHEY_DUPLEX,
-            3,
-            (0, 255, 0),
-        )
-
-    @property
-    def source(self):
-        return self._source
-
-    @source.setter
-    def source(self, new_source):
-        print(f"NEW SOURCE {new_source}")
-        self._source = new_source
-
-    def read(self):
-        if self._source is None:
-            return self._placeholder_frame
-
-        frame = self._source.read()
-        if frame is None:
-            return self._placeholder_frame
-
-        if self.frame_reduction_amount is not None:
-            return reducer(
-                frame,
-                percentage=self.frame_reduction_amount,
-                interpolation=cv.INTER_NEAREST,
-            )
-
-        return frame
-
-    def stop(self):
-        self.running = False
-        if not self._source is None:
-            print("LIVE FEED STOPPED")
+# Removes console output from base Http handler
+# https://stackoverflow.com/questions/56227896/how-do-i-avoid-the-console-logging-of-http-server
+class SuppressedHTTPHandler(http.server.SimpleHTTPRequestHandler):
+    def log_message(self, format, *args):
+        pass
 
 
 class LiveFeed:
-    def __init__(self, frame_reduction_amount=40):
-        self._frame_producer = LiveFeedFrameProducer(frame_reduction_amount)
-        self._live_feed_options = {
-            "custom_stream": self._frame_producer,
-            "custom_data_location": "./",
-            "enable_live_broadcast": True,
-            "frame_size_reduction": 40,
-        }
-        self._stream = WebGear_RTC(**self._live_feed_options)
-        self._streaming = False
+    def __init__(self, source):
+        self.source = source
+        self.stream_directory = f"stream/{source.name}"
+        self._stream_process = None
+        self._server = None
+        self._make_dir()
 
-    @property
     def is_streaming(self):
-        return self._streaming
+        if self._stream_process is None or self._stream_process.poll() is not None:
+            return False
+        return True
 
-    @property
-    def source(self):
-        return self._frame_producer.source
+    def start_streaming(self):
 
-    @source.setter
-    def source(self, new_source):
-        self._frame_producer.source = new_source
+        stream_args = [
+            shutil.which("ffmpeg"),
+            "-i",
+            self.source.source,
+            "-vcodec",
+            "copy",
+            "-an",
+            "-sc_threshold",
+            "0",
+            "-f",
+            "hls",
+            "-hls_time",
+            "5",
+            "-hls_list_size",
+            "5",
+            "-hls_flags",
+            "delete_segments",
+            f"{self.stream_directory}/index.m3u8",
+        ]
 
-    @property
-    def stream_app(self):
-        self._streaming = True
-        return self._stream
+        self._stream_process = subprocess.Popen(
+            stream_args,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+    def start_server(self):
+        """
+        TODO
+        """
+        self._server = socketserver.TCPServer(("0.0.0.0", 8000), SuppressedHTTPHandler)
+        print("Streaming server started at port", 8000)
+        self._server.serve_forever()
+
+    def start(self):
+        if self._stream_process is None:
+            self.start_streaming()
+        if self._server is None:
+            Thread(target=self.start_server).start()
 
     def stop(self):
-        if self._streaming:
-            print("Stopping streaming server")
-            self._streaming = False
-            self._stream.shutdown()
-        else:
-            print("Stream is already stopped")
+        if self._stream_process is not None:
+            self._stream_process.kill()
+        self._server.shutdown()
+        self._server.server_close()
+        self._server = None
+        self._stream_process = None
+
+    def _make_dir(self):
+        dir_name = f"stream/{self.source.name}"
+        if not os.path.exists(dir_name):
+            os.mkdir(dir_name)

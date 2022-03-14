@@ -6,8 +6,6 @@ from camera import VideoSource
 
 import numpy as np
 
-# TODO: Write tests for camera source
-
 
 class TestCamera(unittest.TestCase):
     def test_video_source_is_active(self):
