@@ -1,8 +1,12 @@
+from __future__ import annotations
 import json
 import shutil
 import subprocess
 import time
 from threading import Thread
+from typing import Optional, Tuple
+
+import numpy as np
 
 import config
 import cv2 as cv
@@ -14,19 +18,19 @@ from vidgear.gears import VideoGear
 
 
 class CameraSource:
-    def __init__(self, name, source, max_reset_attempts=5):
+    def __init__(self, name: str, source: str, max_reset_attempts: int = 5):
         """
         Inits Camera objects.
         """
         self.name = name
         self.source = CameraSource.validate_source_url(source)
 
-        self._current_frame = None
-        self._connected = False
-        self._camera_open = False
-        self._camera = None
-        self._camera_thread = None
-        self._reconnect_attempts = 0
+        self._current_frame: np.ndarray | None = None
+        self._connected: bool = False
+        self._camera_open: bool = False
+        self._camera: VideoGear | None = None
+        self._camera_thread: Thread | None = None
+        self._reconnect_attempts: int = 0
         self._max_reconnect_attempts = max_reset_attempts
 
         self._connect_to_cam()
@@ -36,13 +40,13 @@ class CameraSource:
     #     return self._camera.framerate
 
     @property
-    def is_active(self):
+    def is_active(self) -> bool:
         """
         TODO
         """
         return self._camera_open and self._connected
 
-    def start(self):
+    def start(self) -> CameraSource:
         """
         TODO
         """
@@ -55,7 +59,7 @@ class CameraSource:
 
         return self
 
-    def read(self, resize_frame=None):
+    def read(self, resize_frame: Optional[Tuple[int, int]] = None) -> np.ndarray | None:
         """
         TODO
         """
@@ -67,11 +71,11 @@ class CameraSource:
             )
         return self._current_frame
 
-    def _update_frame(self):
+    def _update_frame(self) -> None:
 
         while self.is_active:
             # Read a frame from the camera
-            frame = self._camera.read()
+            frame: np.ndarray | None = self._camera.read()
             if frame is None and self.is_active:
                 self._connected = False
                 # Attempt a reconnection if the frame cannot be read
@@ -87,7 +91,7 @@ class CameraSource:
             self._current_frame = frame
             time.sleep(1 / config.FPS)
 
-    def stop(self):
+    def stop(self) -> None:
         print(f"Stopping camera source {self.name}.")
         self._connected = False
         self._camera_open = False
@@ -97,13 +101,13 @@ class CameraSource:
             self._camera.stop()
 
     @staticmethod
-    def check_source_alive(source, timeout=5):
+    def check_source_alive(source: str, timeout: int = 5) -> bool:
         if not shutil.which("ffprobe"):
             raise RuntimeError("ERROR: Please install ffmpeg/ffprobe.")
 
         result = None
         try:
-            result = subprocess.run(
+            result: subprocess.CompletedProcess = subprocess.run(
                 [
                     shutil.which("ffprobe"),
                     "-v",
@@ -128,7 +132,7 @@ class CameraSource:
         return True
 
     @staticmethod
-    def validate_source_url(source):
+    def validate_source_url(source: str) -> str:
 
         err_message = "ERROR: Source must be an RTSP URL"
         if not isinstance(source, str):
@@ -142,7 +146,7 @@ class CameraSource:
 
         return source
 
-    def _connect_to_cam(self):
+    def _connect_to_cam(self) -> None:
         if not CameraSource.check_source_alive(self.source):
             raise RuntimeError(f"ERROR: Could not connect to camera {self.name}.")
         try:
@@ -159,7 +163,7 @@ class CameraSource:
                 f"ERROR: Could not connect to camera {self.name}."
             ) from err
 
-    def _reconnect(self):
+    def _reconnect(self) -> None:
         while self._reconnect_attempts < self._max_reconnect_attempts:
             print(f"{self.name} reconnection attempt #{self._reconnect_attempts+1}")
 
@@ -185,26 +189,26 @@ class CameraSource:
 
         raise RuntimeError("ERROR: Could not reconnect to camera")
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"Camera({self.name}, {self.source})"
 
-    def __eq__(self, other):
+    def __eq__(self, other: CameraSource) -> bool:
         return self.name == other.name
 
 
 class VideoSource:
-    def __init__(self, video_path):
+    def __init__(self, video_path: str):
         self.name = video_path.split("/")[-1]
         self._vid_cap = VideoGear(source=video_path)
-        self._vid_cap_thread = None
+        self._vid_cap_thread: Thread | None = None
         self._vid_cap_open = False
-        self._current_frame = None
+        self._current_frame: np.ndarray | None = None
 
     @property
-    def is_active(self):
+    def is_active(self) -> bool:
         return self._vid_cap_open
 
-    def start(self):
+    def start(self) -> VideoSource:
         if self.is_active:
             print(f"Video source {self.name} is already on")
         else:
@@ -214,7 +218,7 @@ class VideoSource:
             self._vid_cap_thread.start()
         return self
 
-    def read(self, resize_frame=None):
+    def read(self, resize_frame: Optional[Tuple[int, int]] = None) -> np.ndarray | None:
         if resize_frame and self._current_frame is not None:
             return cv.resize(
                 self._current_frame,
@@ -223,7 +227,7 @@ class VideoSource:
             )
         return self._current_frame
 
-    def stop(self):
+    def stop(self) -> None:
 
         print(f"Stoping video source {self.name}")
         if self._vid_cap and self.is_active:
@@ -231,7 +235,7 @@ class VideoSource:
 
         self._vid_cap_open = False
 
-    def _update_frame(self):
+    def _update_frame(self) -> None:
 
         while self.is_active:
             # Read a frame from the camera

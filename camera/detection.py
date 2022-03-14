@@ -2,12 +2,16 @@
 TODO
 """
 
-
+from __future__ import annotations
 import os
 import random
 import time
 from datetime import datetime
 from threading import Thread
+from typing import Dict, List, Optional, Tuple
+from . import CameraSource, VideoSource
+
+import numpy as np
 
 import config
 import cv2 as cv
@@ -22,21 +26,26 @@ NOISE_KERNEL = cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3))
 
 
 class IntruderRecorder:
-    def __init__(self, detection_sources, recording_directory, max_stored_frames=80):
+    def __init__(
+        self,
+        detection_sources: List[DetectionSource],
+        recording_directory: str,
+        max_stored_frames: int = 80,
+    ):
         self.sources = detection_sources
         self.recordings_directory = recording_directory
         self.max_stored_frames = max_stored_frames
 
-        self._video_writers = {}
-        self._start_times = {}
-        self._stored_frames = {}
+        self._video_writers: Dict[str, WriteGear] = {}
+        self._start_times: Dict[str, str] = {}
+        self._stored_frames: Dict[str, List[np.ndarray]] = {}
         self._setup()
 
-    def get_num_frames_recorded(self, source):
+    def get_num_frames_recorded(self, source: DetectionSource) -> int:
 
         return len(self._stored_frames[source.name])
 
-    def add_frame(self, frame, source):
+    def add_frame(self, frame: np.ndarray | None, source: DetectionSource) -> None:
 
         if self._start_times[source.name] is None:
             current_date_time = datetime.now().strftime("%Y_%m_%d %Hh %Mm %Ss")
@@ -50,7 +59,7 @@ class IntruderRecorder:
             writer = self._video_writers[source.name]
             writer.write(frame)
 
-    def save(self, source, thumb=True):
+    def save(self, source: DetectionSource, thumb: bool = True) -> List[str]:
 
         writer = self._video_writers[source.name]
         writer.close()
@@ -75,7 +84,7 @@ class IntruderRecorder:
         self._stored_frames[source.name] = []
         return paths
 
-    def _rename_video(self, source):
+    def _rename_video(self, source: DetectionSource) -> str:
 
         videos_directory = f"{self.recordings_directory}/videos"
         base_name = f"{videos_directory}/{source.name}"
@@ -91,7 +100,7 @@ class IntruderRecorder:
         os.rename(old_file_path, new_file_path)
         return new_file_path
 
-    def _save_thumb(self, source):
+    def _save_thumb(self, source: DetectionSource) -> str | None:
 
         thumbnails_directory = f"{self.recordings_directory}/thumbnails"
         base_dir = f"{thumbnails_directory}/{source.name}"
@@ -105,7 +114,7 @@ class IntruderRecorder:
                 return thumb_path
         return None
 
-    def _setup(self):
+    def _setup(self) -> None:
 
         self._make_paths()
         self._make_video_writers()
@@ -113,7 +122,7 @@ class IntruderRecorder:
             self._start_times[source.name] = None
             self._stored_frames[source.name] = []
 
-    def _make_video_writers(self):
+    def _make_video_writers(self) -> None:
         for source in self.sources:
             output_params = {"-fourcc": "mp4v", "-fps": config.FPS // 2}
             self._video_writers[source.name] = WriteGear(
@@ -123,7 +132,7 @@ class IntruderRecorder:
                 **output_params,
             )
 
-    def _make_paths(self):
+    def _make_paths(self) -> None:
         if not os.path.exists(self.recordings_directory):
             os.mkdir(self.recordings_directory)
 
@@ -141,7 +150,7 @@ class IntruderRecorder:
 
 
 class DetectionSource:
-    def __init__(self, name, source):
+    def __init__(self, name: str, source: CameraSource | VideoSource):
         self.name = name
         self.source = source
         self.conseq_motion_frames = 0
@@ -153,21 +162,21 @@ class DetectionSource:
         )
 
     @property
-    def is_active(self):
+    def is_active(self) -> bool:
 
         return self.source.is_active
 
-    def start(self):
+    def start(self) -> None:
 
         self.source.start()
 
-    def stop(self):
+    def stop(self) -> None:
 
         if self.is_active:
             self.conseq_motion_frames = 0
             self.source.stop()
 
-    def read(self, resize_frame=None):
+    def read(self, resize_frame: Optional[Tuple[int, int]] = None) -> np.ndarray | None:
 
         frame = self.source.read(resize_frame)
         # read_attempts = 0
@@ -181,7 +190,7 @@ class DetectionSource:
 
         return frame
 
-    def get_foreground_mask(self, frame):
+    def get_foreground_mask(self, frame: np.ndarray) -> np.ndarray:
 
         foreground_mask = self._bg_subtractor.apply(frame)
 
@@ -190,7 +199,9 @@ class DetectionSource:
         )
         return cv.dilate(denoised_foreground_mask, None, iterations=3)
 
-    def find_contours(self, foreground_mask, display_frame=None):
+    def find_contours(
+        self, foreground_mask: np.ndarray, display_frame: Optional[np.ndarray] = None
+    ) -> List[np.ndarray]:
 
         detection_mode = cv.RETR_EXTERNAL
         detection_method = cv.CHAIN_APPROX_SIMPLE
@@ -199,11 +210,12 @@ class DetectionSource:
 
         return self.filter_contours(contours, display_frame)
 
-    def filter_contours(self, contours, display_frame=None):
+    def filter_contours(
+        self, contours: List[np.ndarray], display_frame: Optional[np.ndarray] = None
+    ) -> List[np.ndarray]:
 
-        filtered_contours = []
+        filtered_contours: List[np.ndarray] = []
 
-        # Maybe vectorize this
         # Loop through the contours if there are any
         for contour in contours:
             # Remove small instances of detected motion
@@ -213,7 +225,7 @@ class DetectionSource:
 
             filtered_contours.append(contour)
 
-            # # Performance optimization when there is no need to display a frame
+            # Performance optimization when there is no need to display a frame
             if display_frame is None:
                 break
 
@@ -221,7 +233,7 @@ class DetectionSource:
         return filtered_contours
 
     @staticmethod
-    def _draw_bounding_boxes(display_frame, contour):
+    def _draw_bounding_boxes(display_frame: np.ndarray, contour: np.ndarray) -> None:
 
         # Get the bounding rectangle from the contour
         x_coord, y_coord, width, height = cv.boundingRect(contour)
@@ -239,10 +251,10 @@ class DetectionSource:
 class IntruderDetector:
     def __init__(
         self,
-        detection_sources,
-        recording_directory,
-        num_frames_to_record=100,
-        display_frame=False,
+        detection_sources: List[DetectionSource],
+        recording_directory: str,
+        num_frames_to_record: int = 100,
+        display_frame: bool = False,
     ):
         self.detection_sources = detection_sources
 
@@ -254,12 +266,12 @@ class IntruderDetector:
             self.detection_sources, recording_directory, num_frames_to_record
         )
 
-    def start_sources(self):
+    def start_sources(self) -> None:
 
         for source in self.detection_sources:
             source.start()
 
-    def get_detection_status(self):
+    def get_detection_status(self) -> bool:
 
         all_sources_inactive = all(
             not source.is_active for source in self.detection_sources
@@ -268,7 +280,9 @@ class IntruderDetector:
             return False
         return True
 
-    def read_frame(self, source: DetectionSource, resize_frame=None):
+    def read_frame(
+        self, source: DetectionSource, resize_frame: Tuple[int, int] = None
+    ) -> np.ndarray | None:
 
         frame = source.read(resize_frame)
 
@@ -278,14 +292,16 @@ class IntruderDetector:
         return frame
 
     @staticmethod
-    def update_conseq_frames(source, contours):
+    def update_conseq_frames(
+        source: DetectionSource, contours: List[np.ndarray]
+    ) -> None:
 
         if IntruderDetector.is_motion_frame(contours):
             source.conseq_motion_frames += 1
         else:
             source.conseq_motion_frames = 0
 
-    def detect(self, min_conseq_frames=15):
+    def detect(self, min_conseq_frames: int = 15) -> None:
 
         self._detection_status = True
 
@@ -323,7 +339,9 @@ class IntruderDetector:
 
         self.stop_detection()
 
-    def detect_motion_in_frame(self, frame, source):
+    def detect_motion_in_frame(
+        self, frame: np.ndarray, source: DetectionSource
+    ) -> None:
 
         foreground_mask = source.get_foreground_mask(frame)
 
@@ -332,18 +350,20 @@ class IntruderDetector:
         self.update_conseq_frames(source, contours)
 
     @staticmethod
-    def is_motion_frame(contours):
+    def is_motion_frame(contours: List[np.ndarray]) -> bool:
 
         # If no contours have been found then this is not a motion frame
         return contours is not None and len(contours) != 0
 
-    def check_for_intruders(self, frame, source, min_conseq_frames):
+    def check_for_intruders(
+        self, frame: np.ndarray, source: DetectionSource, min_conseq_frames: int
+    ) -> None:
 
         if source.conseq_motion_frames >= min_conseq_frames:
             print(f"intruder detected at {source.name}")
             self.record_frame(frame, source)
 
-    def record_frame(self, frame, source):
+    def record_frame(self, frame: np.ndarray, source: DetectionSource) -> None:
 
         num_frames_recorded = self._recorder.get_num_frames_recorded(source)
         if num_frames_recorded <= self._max_frames_to_record:
@@ -351,7 +371,7 @@ class IntruderDetector:
         else:
             self._save_recordings(source)
 
-    def stop_detection(self):
+    def stop_detection(self) -> None:
 
         self._detection_status = False
 
@@ -362,7 +382,7 @@ class IntruderDetector:
                 print(f"Saving recordings for source {source.name}")
                 self._save_recordings(source)
 
-    def _save_recordings(self, source):
+    def _save_recordings(self, source: DetectionSource) -> None:
         Thread(target=self._recorder.save, args=(source, False)).start()
 
 

@@ -1,9 +1,13 @@
+from __future__ import annotations
 import os
 import subprocess
 import shutil
 import http
 import socketserver
 from threading import Thread
+
+from camera.camera import CameraSource, VideoSource
+from camera.detection import DetectionSource
 
 # Removes console output from base Http handler
 # https://stackoverflow.com/questions/56227896/how-do-i-avoid-the-console-logging-of-http-server
@@ -13,19 +17,19 @@ class SuppressedHTTPHandler(http.server.SimpleHTTPRequestHandler):
 
 
 class LiveFeed:
-    def __init__(self, source):
+    def __init__(self, source: VideoSource | DetectionSource | CameraSource):
         self.source = source
         self.stream_directory = f"stream/{source.name}"
-        self._stream_process = None
-        self._server = None
+        self._stream_process: subprocess.Popen | None = None
+        self._server: socketserver.TCPServer | None = None
         self._make_dir()
 
-    def is_streaming(self):
+    def is_streaming(self) -> bool:
         if self._stream_process is None or self._stream_process.poll() is not None:
             return False
         return True
 
-    def start_streaming(self):
+    def start_streaming(self) -> None:
 
         stream_args = [
             shutil.which("ffmpeg"),
@@ -53,7 +57,7 @@ class LiveFeed:
             stderr=subprocess.DEVNULL,
         )
 
-    def start_server(self):
+    def start_server(self) -> None:
         """
         TODO
         """
@@ -61,13 +65,13 @@ class LiveFeed:
         print("Streaming server started at port", 8000)
         self._server.serve_forever()
 
-    def start(self):
+    def start(self) -> None:
         if self._stream_process is None:
             self.start_streaming()
         if self._server is None:
             Thread(target=self.start_server).start()
 
-    def stop(self):
+    def stop(self) -> None:
         if self._stream_process is not None:
             self._stream_process.kill()
         self._server.shutdown()
@@ -75,7 +79,7 @@ class LiveFeed:
         self._server = None
         self._stream_process = None
 
-    def _make_dir(self):
+    def _make_dir(self) -> None:
         dir_name = f"stream/{self.source.name}"
         if not os.path.exists(dir_name):
             os.mkdir(dir_name)
