@@ -3,26 +3,26 @@ TODO
 """
 
 from __future__ import annotations
+
 import os
 import random
 import time
 from datetime import datetime
 from threading import Thread
 from typing import Dict, List, Optional, Tuple
-from . import CameraSource, VideoSource
-
-import numpy as np
 
 import config
 import cv2 as cv
+import numpy as np
 from vidgear.gears import WriteGear
+
+from . import CameraSource, VideoSource
 
 NOISE_KERNEL = cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3))
 
 # TODO: Add object detection
 # TODO: Clean dependencies
 # TODO: DOCUMENTATION
-# TODO: WRITE TESTS
 
 
 class IntruderRecorder:
@@ -386,18 +386,54 @@ class IntruderDetector:
         Thread(target=self._recorder.save, args=(source, False)).start()
 
 
-class Intruder:
-    def __init__(self, frames):
+class IntruderAnalyzer:
 
-        self.camera_name = None
-        self.time_detected = None
-        self.intruder_type = None
+    ssd_classes = [
+        "background",
+        "aeroplane",
+        "bicycle",
+        "bird",
+        "boat",
+        "bottle",
+        "bus",
+        "car",
+        "cat",
+        "chair",
+        "cow",
+        "diningtable",
+        "dog",
+        "horse",
+        "motorbike",
+        "person",
+        "pottedplant",
+        "sheep",
+        "sofa",
+        "train",
+        "tvmonitor",
+    ]
 
-        self._frames = frames
-        # self.analyze_in_background()
+    def __init__(self):
+        # Path to Yolo weights and configuration files
+        ssd_weights = "./ssd/MobileNetSSD_deploy.caffemodel"
+        ssd_config = "./ssd/MobileNetSSD_deploy.prototxt"
 
-    def _read_frames(self):
-        pass
+        self.net = cv.dnn.readNetFromCaffe(ssd_config, ssd_weights)
 
-    def _analyze(self):
-        pass
+    def analyze_intruder(self, frame: np.ndarray) -> List[Tuple[str, float]]:
+        # Convert the frame into an appropriate format for SSD
+        blob = cv.dnn.blobFromImage(frame, 0.007843, (300, 300), 127.5)
+        self.net.setInput(blob)
+        # Perform inference on the frame
+        detections = self.net.forward()
+
+        predicted_labels = []
+        for i in np.arange(0, detections.shape[2]):
+            # Get confidence score
+            confidence = detections[0, 0, i, 2]
+            if confidence > 0.5:
+                class_id = int(detections[0, 0, i, 1])
+                predicted_labels.append((self.ssd_classes[class_id], confidence))
+
+        # Sort by confidence score in descending order and return
+        predicted_labels.sort(key=lambda x: x[1], reverse=True)
+        return predicted_labels
