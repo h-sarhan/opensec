@@ -1,18 +1,20 @@
+from typing import List
 import cv2 as cv
 from django.conf import settings
 
 from .camera import CameraSource
+from .detection import DetectionSource
 from .live_feed import LiveFeed
+from opensec.models import Camera
 
 
 class CameraManager:
     def __init__(self):
-        self.cameras = []
-        self.sources = []
-        # self.feed = LiveFeed()
+        self.cameras: List[Camera] = []
+        self.sources: List[CameraSource] = []
+        self.live_feeds: List[LiveFeed] = []
 
-    # @sync_to_async
-    def update_camera_list(self, camera_model):
+    def update_camera_list(self, camera_model: Camera):
         self.cameras = list(camera_model.objects.all())
 
     def connect_to_sources(self):
@@ -34,12 +36,6 @@ class CameraManager:
             cv.imwrite(snapshot_path, frame)
             camera.snapshot = snapshot_path
             camera.save()
-
-    def get_stream_app(self):
-        return self.feed.stream_app
-
-    def swap_feed_source(self, new_source):
-        self.feed.source = new_source
 
 
 camera_manager = CameraManager()
