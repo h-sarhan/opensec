@@ -7,10 +7,8 @@ from schedule import Scheduler
 
 def startup_job(camera_model):
     print("UPDATING CAMERAS")
-    camera_manager.update_camera_list(camera_model)
     print("CONNECTING TO SOURCES")
-    camera_manager.connect_to_sources()
-    camera_manager.update_snapshots()
+    camera_manager.setup(camera_model)
 
 
 def update_snapshots_job():

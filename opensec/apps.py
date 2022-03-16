@@ -14,7 +14,5 @@ class OpensecConfig(AppConfig):
 
             from .jobs import run_jobs_in_background, startup_job
 
-            # loop = asyncio.get_event_loop()
-            # asyncio.run_coroutine_threadsafe(startup_job(Camera), loop)
             startup_job(Camera)
             run_jobs_in_background()

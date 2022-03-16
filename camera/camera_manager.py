@@ -14,18 +14,30 @@ class CameraManager:
         self.sources: List[CameraSource] = []
         self.live_feeds: List[LiveFeed] = []
 
+    def setup(self, camera_model: Camera):
+        self.update_camera_list(camera_model)
+
+        # Initially the cameras will be inactive
+        for camera in self.cameras:
+            camera.is_active = False
+
+        self.connect_to_sources()
+        self.update_snapshots()
+
     def update_camera_list(self, camera_model: Camera):
         self.cameras = list(camera_model.objects.all())
 
     def connect_to_sources(self):
         for camera in self.cameras:
-            try:
-                source = CameraSource(camera.name, camera.rtsp_url).start()
-                self.sources.append(source)
-            except RuntimeError:
-                print(f"Could not connect to camera {camera.name}")
-                self.sources.append(None)
-                continue
+            if not camera.is_active:
+                try:
+                    source = CameraSource(camera.name, camera.rtsp_url).start()
+                    self.sources.append(source)
+                    camera.is_active = True
+                except RuntimeError:
+                    print(f"Could not connect to camera {camera.name}")
+                    self.sources.append(None)
+                    continue
 
     def update_snapshots(self):
         for camera, source in zip(self.cameras, self.sources):
