@@ -8,7 +8,6 @@ import os
 import random
 import time
 from datetime import datetime
-from threading import Thread
 from typing import Dict, List, Optional, Tuple
 
 import config
@@ -26,6 +25,8 @@ NOISE_KERNEL = cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3))
 
 
 class IntruderRecorder:
+    num_frames_to_analyze = 10
+
     def __init__(
         self,
         detection_sources: List[DetectionSource],
@@ -39,7 +40,15 @@ class IntruderRecorder:
         self._video_writers: Dict[str, WriteGear] = {}
         self._start_times: Dict[str, str] = {}
         self._stored_frames: Dict[str, List[np.ndarray]] = {}
+        self._intruder_labels: Dict[str, List[Tuple[str, float]]] = {}
+        self._analyzer = IntruderAnalyzer()
+        self._is_analyzing = False
         self._setup()
+
+    def get_labels(self) -> Dict[str, Dict[str, float]] | None:
+        if self._is_analyzing:
+            return None
+        return self._intruder_labels
 
     def get_num_frames_recorded(self, source: DetectionSource) -> int:
 
@@ -80,6 +89,11 @@ class IntruderRecorder:
             thumb_path = self._save_thumb(source)
             paths.append(thumb_path)
 
+        frames_to_analyze = [
+            random.choice(self._stored_frames[source.name])
+            for _ in range(self.num_frames_to_analyze)
+        ]
+        self._analyze_intruders(source, frames_to_analyze)
         self._start_times[source.name] = None
         self._stored_frames[source.name] = []
         return paths
@@ -147,6 +161,17 @@ class IntruderRecorder:
             for source in self.sources:
                 if not os.path.exists(f"{directory}/{source.name}"):
                     os.mkdir(f"{directory}/{source.name}")
+
+    def _analyze_intruders(self, source: DetectionSource, frames: List[np.ndarray]):
+        self._is_analyzing = True
+        predictions: List[Tuple[str, float]] = []
+        for random_frame in frames:
+            frame_labels = self._analyzer.analyze_frame(random_frame)
+            if frame_labels is not None:
+                predictions.append(frame_labels)
+
+        self._intruder_labels[source.name] = predictions
+        self._is_analyzing = False
 
 
 class DetectionSource:
@@ -271,6 +296,30 @@ class IntruderDetector:
         for source in self.detection_sources:
             source.start()
 
+    def get_intruder_labels(self) -> Dict[str, Dict[str, float]] | None:
+        labels = self._recorder.get_labels()
+        if labels is None:
+            return labels
+
+        intruder_labels: Dict[str, Dict[str, float]] = {}
+        for source in self.detection_sources:
+            class_count: Dict[str, int] = {}
+            class_scores: Dict[str, float] = {}
+
+            for ssd_class, score in labels[source.name]:
+                if ssd_class not in class_count:
+                    class_count[ssd_class] = 1
+                    class_scores[ssd_class] = score
+                else:
+                    class_count[ssd_class] += 1
+                    class_scores[ssd_class] += score
+
+            for ssd_class, count in class_count.items():
+                class_scores[ssd_class] /= count
+
+            intruder_labels[source.name] = class_scores
+        return intruder_labels
+
     def get_detection_status(self) -> bool:
 
         all_sources_inactive = all(
@@ -378,12 +427,12 @@ class IntruderDetector:
         for source in self.detection_sources:
 
             num_frames_recorded = self._recorder.get_num_frames_recorded(source)
-            if num_frames_recorded >= 50:
+            if num_frames_recorded >= self._max_frames_to_record // 4:
                 print(f"Saving recordings for source {source.name}")
                 self._save_recordings(source)
 
     def _save_recordings(self, source: DetectionSource) -> None:
-        Thread(target=self._recorder.save, args=(source, False)).start()
+        self._recorder.save(source, thumb=True)
 
 
 class IntruderAnalyzer:
@@ -419,8 +468,11 @@ class IntruderAnalyzer:
 
         self.net = cv.dnn.readNetFromCaffe(ssd_config, ssd_weights)
 
-    def analyze_intruder(self, frame: np.ndarray) -> List[Tuple[str, float]]:
+    def analyze_frame(self, frame: np.ndarray) -> Tuple[str, float] | None:
         # Convert the frame into an appropriate format for SSD
+        if frame is None:
+            print("frame passed to analyze_frame is None")
+            return None
         blob = cv.dnn.blobFromImage(frame, 0.007843, (300, 300), 127.5)
         self.net.setInput(blob)
         # Perform inference on the frame
@@ -436,4 +488,4 @@ class IntruderAnalyzer:
 
         # Sort by confidence score in descending order and return
         predicted_labels.sort(key=lambda x: x[1], reverse=True)
-        return predicted_labels
+        return predicted_labels[0]
