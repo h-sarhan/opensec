@@ -13,6 +13,7 @@ from typing import Dict, List, Optional, Tuple
 import config
 import cv2 as cv
 import numpy as np
+from opensec.models import Camera, Intruder
 from vidgear.gears import WriteGear
 
 from . import CameraSource, VideoSource
@@ -40,12 +41,12 @@ class IntruderRecorder:
         self._video_writers: Dict[str, WriteGear] = {}
         self._start_times: Dict[str, str] = {}
         self._stored_frames: Dict[str, List[np.ndarray]] = {}
-        self._intruder_labels: Dict[str, List[Tuple[str, float]]] = {}
+        self._intruder_labels: Dict[str, List[str]] = {}
         self._analyzer = IntruderAnalyzer()
         self._is_analyzing = False
         self._setup()
 
-    def get_labels(self) -> Dict[str, Dict[str, float]] | None:
+    def get_labels(self) -> Dict[str, List[str]] | None:
         if self._is_analyzing:
             return None
         return self._intruder_labels
@@ -159,16 +160,18 @@ class IntruderRecorder:
                 os.mkdir(directory)
 
             for source in self.sources:
-                if not os.path.exists(f"{directory}/{source.name}"):
+                if source is not None and not os.path.exists(
+                    f"{directory}/{source.name}"
+                ):
                     os.mkdir(f"{directory}/{source.name}")
 
     def _analyze_intruders(self, source: DetectionSource, frames: List[np.ndarray]):
         self._is_analyzing = True
-        predictions: List[Tuple[str, float]] = []
+        predictions: List[str] = []
         for random_frame in frames:
             frame_labels = self._analyzer.analyze_frame(random_frame)
             if frame_labels is not None:
-                predictions.append(frame_labels)
+                predictions.extend(frame_labels)
 
         self._intruder_labels[source.name] = predictions
         self._is_analyzing = False
@@ -278,7 +281,7 @@ class IntruderDetector:
         self,
         detection_sources: List[DetectionSource],
         recording_directory: str,
-        num_frames_to_record: int = 100,
+        num_frames_to_record: int = 30,
         display_frame: bool = False,
     ):
         self.detection_sources = detection_sources
@@ -296,29 +299,18 @@ class IntruderDetector:
         for source in self.detection_sources:
             source.start()
 
-    def get_intruder_labels(self) -> Dict[str, Dict[str, float]] | None:
+    def get_intruder_labels(self) -> Dict[str, str] | None:
         labels = self._recorder.get_labels()
         if labels is None:
             return labels
+        intruders: Dict[str, str] = {}
+        for source, intruder_labels in labels.items():
+            if "cat" in intruder_labels or "dog" in intruder_labels:
+                intruders[source] = "animal"
+            if "person" in intruder_labels:
+                intruders[source] = "person"
 
-        intruder_labels: Dict[str, Dict[str, float]] = {}
-        for source in self.detection_sources:
-            class_count: Dict[str, int] = {}
-            class_scores: Dict[str, float] = {}
-
-            for ssd_class, score in labels[source.name]:
-                if ssd_class not in class_count:
-                    class_count[ssd_class] = 1
-                    class_scores[ssd_class] = score
-                else:
-                    class_count[ssd_class] += 1
-                    class_scores[ssd_class] += score
-
-            for ssd_class, count in class_count.items():
-                class_scores[ssd_class] /= count
-
-            intruder_labels[source.name] = class_scores
-        return intruder_labels
+        return intruders
 
     def get_detection_status(self) -> bool:
 
@@ -340,14 +332,15 @@ class IntruderDetector:
 
         return frame
 
-    @staticmethod
     def update_conseq_frames(
-        source: DetectionSource, contours: List[np.ndarray]
+        self, source: DetectionSource, contours: List[np.ndarray]
     ) -> None:
 
         if IntruderDetector.is_motion_frame(contours):
             source.conseq_motion_frames += 1
         else:
+            if source.conseq_motion_frames > 0:
+                self._save_recordings(source)
             source.conseq_motion_frames = 0
 
     def detect(self, min_conseq_frames: int = 15) -> None:
@@ -431,8 +424,36 @@ class IntruderDetector:
                 print(f"Saving recordings for source {source.name}")
                 self._save_recordings(source)
 
+    def add_intruder(
+        self, source: DetectionSource, video_path: str, thumb_path: Optional[str] = None
+    ):
+        intruder_labels = self.get_intruder_labels()
+        label = intruder_labels.get(source.name, "Unknown")
+
+        camera = Camera.objects.get(name=source.name)
+        if thumb_path is not None:
+            Intruder.objects.create(
+                label=label,
+                video=video_path,
+                thumbnail=thumb_path,
+                camera=camera,
+            )
+        else:
+            Intruder.objects.create(
+                label=label,
+                video=video_path,
+                camera=camera,
+            )
+
     def _save_recordings(self, source: DetectionSource) -> None:
-        self._recorder.save(source, thumb=True)
+        num_frames_recorded = self._recorder.get_num_frames_recorded(source)
+        if num_frames_recorded > self._max_frames_to_record // 2:
+            print("Saving recording and adding intruder to database")
+            paths = self._recorder.save(source, thumb=True)
+            if len(paths) == 2:
+                self.add_intruder(source, video_path=paths[0], thumb_path=paths[1])
+            else:
+                self.add_intruder(source, video_path=paths[0])
 
 
 class IntruderAnalyzer:
@@ -468,7 +489,7 @@ class IntruderAnalyzer:
 
         self.net = cv.dnn.readNetFromCaffe(ssd_config, ssd_weights)
 
-    def analyze_frame(self, frame: np.ndarray) -> Tuple[str, float] | None:
+    def analyze_frame(self, frame: np.ndarray) -> List[str] | None:
         # Convert the frame into an appropriate format for SSD
         if frame is None:
             print("frame passed to analyze_frame is None")
@@ -486,6 +507,7 @@ class IntruderAnalyzer:
                 class_id = int(detections[0, 0, i, 1])
                 predicted_labels.append((self.ssd_classes[class_id], confidence))
 
-        # Sort by confidence score in descending order and return
-        predicted_labels.sort(key=lambda x: x[1], reverse=True)
-        return predicted_labels[0]
+        if not predicted_labels:
+            return None
+        # Get labels only
+        return [label for label, _ in predicted_labels]

@@ -11,6 +11,10 @@ ssd/
 media/camera_snaps
 main.py.lprof
 staticfiles/
+recordings/
+media/camera_snaps
+media/intruders
+media/videos
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

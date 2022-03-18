@@ -1,18 +1,23 @@
+from __future__ import annotations
+from threading import Thread
+
 from typing import List
+
 import cv2 as cv
 from django.conf import settings
+from opensec.models import Camera
 
 from .camera import CameraSource
-from .detection import DetectionSource
+from .detection import DetectionSource, IntruderDetector
 from .live_feed import LiveFeed
-from opensec.models import Camera
 
 
 class CameraManager:
     def __init__(self):
         self.cameras: List[Camera] = []
-        self.sources: List[CameraSource] = []
+        self.sources: List[DetectionSource] = []
         self.live_feeds: List[LiveFeed] = []
+        self.detector: IntruderDetector | None = None
 
     def setup(self, camera_model: Camera):
         self.update_camera_list(camera_model)
@@ -20,9 +25,20 @@ class CameraManager:
         # Initially the cameras will be inactive
         for camera in self.cameras:
             camera.is_active = False
+            camera.save()
 
         self.connect_to_sources()
         self.update_snapshots()
+        self.start_detection()
+
+    def start_detection(self):
+        self.detector = IntruderDetector(
+            self.sources,
+            f"{settings.MEDIA_ROOT}/intruders",
+            num_frames_to_record=100,
+            display_frame=False,
+        )
+        Thread(target=self.detector.detect).start()
 
     def update_camera_list(self, camera_model: Camera):
         self.cameras = list(camera_model.objects.all())
@@ -31,9 +47,14 @@ class CameraManager:
         for camera in self.cameras:
             if not camera.is_active:
                 try:
-                    source = CameraSource(camera.name, camera.rtsp_url).start()
+                    camera_source = CameraSource(
+                        camera.name, camera.rtsp_url, max_reset_attempts=3
+                    )
+                    source = DetectionSource(camera.name, camera_source)
+                    source.start()
                     self.sources.append(source)
                     camera.is_active = True
+                    camera.save()
                 except RuntimeError:
                     print(f"Could not connect to camera {camera.name}")
                     self.sources.append(None)
@@ -44,10 +65,11 @@ class CameraManager:
             if source is None:
                 continue
             frame = source.read()
-            snapshot_path = f"{settings.MEDIA_ROOT}/camera_snaps/{source.name}.jpg"
-            cv.imwrite(snapshot_path, frame)
-            camera.snapshot = snapshot_path
-            camera.save()
+            if frame is not None:
+                snapshot_path = f"{settings.MEDIA_ROOT}/camera_snaps/{source.name}.jpg"
+                cv.imwrite(snapshot_path, frame)
+                camera.snapshot = snapshot_path
+                camera.save()
 
 
 camera_manager = CameraManager()

@@ -13,7 +13,7 @@ django = "*"
 pillow = "*"
 uvicorn = "*"
 gunicorn = "*"
-aiohttp = "*"
+schedule = "*"
 
 [dev-packages]
 pytest = "*"

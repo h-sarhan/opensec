@@ -9,6 +9,7 @@ from threading import Thread
 from camera.camera import CameraSource, VideoSource
 from camera.detection import DetectionSource
 
+
 # Removes console output from base Http handler
 # https://stackoverflow.com/questions/56227896/how-do-i-avoid-the-console-logging-of-http-server
 class SuppressedHTTPHandler(http.server.SimpleHTTPRequestHandler):
