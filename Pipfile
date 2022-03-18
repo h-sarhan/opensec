@@ -14,6 +14,7 @@ pillow = "*"
 uvicorn = "*"
 gunicorn = "*"
 schedule = "*"
+django-cors-headers = "*"
 
 [dev-packages]
 pytest = "*"

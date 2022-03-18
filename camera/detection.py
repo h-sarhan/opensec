@@ -189,6 +189,9 @@ class DetectionSource:
             isParallel=False,
         )
 
+    def get_rtsp_link(self):
+        return self.source.source
+
     @property
     def is_active(self) -> bool:
 
@@ -428,7 +431,8 @@ class IntruderDetector:
         self, source: DetectionSource, video_path: str, thumb_path: Optional[str] = None
     ):
         intruder_labels = self.get_intruder_labels()
-        label = intruder_labels.get(source.name, "Unknown")
+        # TODO: If no label is found then flag intruder as false alarm or dont even add them
+        label = intruder_labels.get(source.name, None)
 
         camera = Camera.objects.get(name=source.name)
         if thumb_path is not None:

@@ -6,4 +6,4 @@ from .detection import (
     IntruderDetector,
     IntruderRecorder,
 )
-from .live_feed import LiveFeed
+from .live_feed import LiveFeed, LiveFeedServer

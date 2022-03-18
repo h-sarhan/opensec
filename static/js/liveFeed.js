@@ -5,18 +5,18 @@ function loadVideo(video, source) {
     hls.loadSource(source);
   });
 }
-const STREAM_URL = JSON.parse(document.getElementById('liveFeedUrl').textContent);
+// let STREAM_URL = JSON.parse(document.getElementById('liveFeedUrl').textContent);
+let STREAM_URL = '/media/stream/Bedroom/index.m3u8';
+console.log(STREAM_URL);
 const video = document.getElementById('video');
 const playBtn = document.getElementById('play-btn');
 
-loadVideo(video, STREAM_URL)
+loadVideo(video, STREAM_URL);
 
+// playBtn.addEventListener('click', () => {
+// });
 
-playBtn.addEventListener('click', () => {
-  video.play();
-  video.currentTime = video.duration - 3;
-});
-
-setTimeout(() => {
-  video.currentTime = video.duration - 3;
+video.play();
+setInterval(() => {
+  video.currentTime = video.duration - 4;
 }, 10000);

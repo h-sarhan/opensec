@@ -9,7 +9,7 @@ from opensec.models import Camera
 
 from .camera import CameraSource
 from .detection import DetectionSource, IntruderDetector
-from .live_feed import LiveFeed
+from .live_feed import LiveFeed, LiveFeedServer
 
 
 class CameraManager:
@@ -18,6 +18,7 @@ class CameraManager:
         self.sources: List[DetectionSource] = []
         self.live_feeds: List[LiveFeed] = []
         self.detector: IntruderDetector | None = None
+        self.live_feed_server: LiveFeedServer = LiveFeedServer()
 
     def setup(self, camera_model: Camera):
         self.update_camera_list(camera_model)
@@ -29,7 +30,20 @@ class CameraManager:
 
         self.connect_to_sources()
         self.update_snapshots()
+        self.setup_live_feeds()
         self.start_detection()
+
+    def setup_live_feeds(self):
+        for source, camera in zip(self.sources, self.cameras):
+            if source is not None:
+                feed = LiveFeed(source)
+                stream_link = feed.start()
+                self.live_feeds.append(feed)
+                camera.stream_link = stream_link
+                camera.save()
+            else:
+                self.live_feeds.append(None)
+        self.live_feed_server.start_server()
 
     def start_detection(self):
         self.detector = IntruderDetector(

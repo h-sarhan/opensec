@@ -11,14 +11,8 @@ class Camera(models.Model):
         max_length=200,
     )
     is_active = models.BooleanField("Is the camera currently active?", default=False)
-    video_height = models.PositiveIntegerField(
-        "Source video height", null=True, blank=True
-    )
-    video_width = models.PositiveIntegerField(
-        "Source video width", null=True, blank=True
-    )
-    video_framerate = models.PositiveIntegerField(
-        "Source video framerate", null=True, blank=True
+    stream_link = models.CharField(
+        "Link to camera stream", blank=True, null=True, max_length=500
     )
     date_added = models.DateTimeField("Camera addition date", default=timezone.now)
     snapshot = models.ImageField(

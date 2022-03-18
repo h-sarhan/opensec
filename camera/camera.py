@@ -46,6 +46,9 @@ class CameraSource:
         """
         return self._camera_open and self._connected
 
+    def get_rtsp_link(self):
+        return self.source
+
     def start(self) -> CameraSource:
         """
         TODO
