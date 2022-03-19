@@ -431,23 +431,24 @@ class IntruderDetector:
         self, source: DetectionSource, video_path: str, thumb_path: Optional[str] = None
     ):
         intruder_labels = self.get_intruder_labels()
-        # TODO: If no label is found then flag intruder as false alarm or dont even add them
         label = intruder_labels.get(source.name, None)
 
-        camera = Camera.objects.get(name=source.name)
-        if thumb_path is not None:
-            Intruder.objects.create(
-                label=label,
-                video=video_path,
-                thumbnail=thumb_path,
-                camera=camera,
-            )
-        else:
-            Intruder.objects.create(
-                label=label,
-                video=video_path,
-                camera=camera,
-            )
+        # If no label is produced then don't add intruder to database
+        if label is not None:
+            camera = Camera.objects.get(name=source.name)
+            if thumb_path is not None:
+                Intruder.objects.create(
+                    label=label,
+                    video=video_path,
+                    thumbnail=thumb_path,
+                    camera=camera,
+                )
+            else:
+                Intruder.objects.create(
+                    label=label,
+                    video=video_path,
+                    camera=camera,
+                )
 
     def _save_recordings(self, source: DetectionSource) -> None:
         num_frames_recorded = self._recorder.get_num_frames_recorded(source)
