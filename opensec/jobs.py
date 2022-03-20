@@ -1,16 +1,21 @@
 import threading
 import time
 
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 from schedule import Scheduler
 
+import opensec.models
+from .apps import camera_manager
 
-def startup_job(camera_manager):
+
+def startup_job():
     print("UPDATING CAMERAS")
     print("CONNECTING TO SOURCES")
     camera_manager.setup_and_update_cameras()
 
 
-def update_snapshots_job(camera_manager):
+def update_snapshots_job():
     print("Snapshot updated")
     camera_manager.update_snapshots()
 
@@ -40,7 +45,17 @@ def run_continuously(self, interval=1):
 Scheduler.run_continuously = run_continuously
 
 
-def run_jobs_in_background(camera_manager):
+def run_jobs_in_background():
     scheduler = Scheduler()
-    scheduler.every(10).seconds.do(lambda: update_snapshots_job(camera_manager))
+    scheduler.every(10).seconds.do(update_snapshots_job)
     scheduler.run_continuously()
+
+
+@receiver(post_save, sender=opensec.models.Camera)
+def update_cameras(sender, instance, created, **kwargs):
+    if camera_manager is not None:
+        if created:
+            print("ADDING NEW CAMERA")
+            camera_manager.setup_and_update_cameras()
+        else:
+            camera_manager.update_source(instance)

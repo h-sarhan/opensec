@@ -13,7 +13,6 @@ from typing import Dict, List, Optional, Tuple
 import config
 import cv2 as cv
 import numpy as np
-import opensec.models
 from vidgear.gears import WriteGear
 
 from . import CameraSource, VideoSource
@@ -284,11 +283,14 @@ class IntruderDetector:
         self,
         detection_sources: List[DetectionSource],
         recording_directory: str,
+        camera_model,
+        intruder_model,
         num_frames_to_record: int = 30,
         display_frame: bool = False,
     ):
         self.detection_sources = detection_sources
-
+        self.camera_model = camera_model
+        self.intruder_model = intruder_model
         self._display_frame = display_frame
         self._max_frames_to_record = num_frames_to_record
 
@@ -435,16 +437,16 @@ class IntruderDetector:
 
         # If no label is produced then don't add intruder to database
         if label is not None:
-            camera = opensec.models.Camera.objects.get(name=source.name)
+            camera = self.camera_model.objects.get(name=source.name)
             if thumb_path is not None:
-                opensec.models.Intruder.objects.create(
+                self.intruder_model.objects.create(
                     label=label,
                     video=video_path,
                     thumbnail=thumb_path,
                     camera=camera,
                 )
             else:
-                opensec.models.Intruder.objects.create(
+                self.intruder_model.objects.create(
                     label=label,
                     video=video_path,
                     camera=camera,
