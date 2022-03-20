@@ -1,23 +1,13 @@
 from __future__ import annotations
 
-import http
 import os
 import shutil
-import socketserver
 import subprocess
-from threading import Thread
 
 import config
 
 from camera.camera import CameraSource, VideoSource
 from camera.detection import DetectionSource
-
-
-# Removes console output from base Http handler
-# https://stackoverflow.com/questions/56227896/how-do-i-avoid-the-console-logging-of-http-server
-class SuppressedHTTPHandler(http.server.SimpleHTTPRequestHandler):
-    def log_message(self, format, *args):
-        pass
 
 
 class LiveFeed:
@@ -74,20 +64,3 @@ class LiveFeed:
     def _make_dir(self) -> None:
         if not os.path.exists(self.stream_directory):
             os.mkdir(self.stream_directory)
-
-
-class LiveFeedServer:
-    def __init__(self):
-        self._server = None
-
-    def start_server(self):
-        Thread(target=self._start_server).start()
-
-    def _start_server(self) -> None:
-        self._server = socketserver.TCPServer(("0.0.0.0", 8080), SuppressedHTTPHandler)
-        print("Streaming server started at port", 8080)
-        self._server.serve_forever()
-
-    def stop_server(self):
-        self._server.shutdown()
-        self._server.server_close()

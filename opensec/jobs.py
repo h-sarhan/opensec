@@ -1,17 +1,16 @@
 import threading
 import time
 
-from camera import camera_manager
 from schedule import Scheduler
 
 
-def startup_job(camera_model):
+def startup_job(camera_manager):
     print("UPDATING CAMERAS")
     print("CONNECTING TO SOURCES")
-    camera_manager.setup(camera_model)
+    camera_manager.setup_and_update_cameras()
 
 
-def update_snapshots_job():
+def update_snapshots_job(camera_manager):
     print("Snapshot updated")
     camera_manager.update_snapshots()
 
@@ -41,11 +40,7 @@ def run_continuously(self, interval=1):
 Scheduler.run_continuously = run_continuously
 
 
-def run_jobs_in_background():
+def run_jobs_in_background(camera_manager):
     scheduler = Scheduler()
-    scheduler.every(10).seconds.do(update_snapshots_job)
+    scheduler.every(10).seconds.do(lambda: update_snapshots_job(camera_manager))
     scheduler.run_continuously()
-
-
-def reconnect_cameras():
-    pass

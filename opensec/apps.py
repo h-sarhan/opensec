@@ -11,8 +11,10 @@ class OpensecConfig(AppConfig):
 
         if os.environ.get("RUN_MAIN"):
             from opensec.models import Camera
-
+            from camera import CameraManager
             from .jobs import run_jobs_in_background, startup_job
 
-            startup_job(Camera)
-            run_jobs_in_background()
+            camera_manager = CameraManager(Camera)
+
+            startup_job(camera_manager)
+            run_jobs_in_background(camera_manager)
