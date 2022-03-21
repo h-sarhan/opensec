@@ -19,4 +19,4 @@ loadVideo(video, STREAM_URL);
 video.play();
 setInterval(() => {
   video.currentTime = video.duration - 4;
-}, 6000);
+}, 10000);

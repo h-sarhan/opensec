@@ -37,5 +37,11 @@ class Intruder(models.Model):
         on_delete=models.CASCADE,
     )
 
+    def thumbnail_media_url(self):
+        return f"/media/{self.thumbnail.split('media/')[-1]}"
+
+    def video_media_url(self):
+        return f"/media/{self.video.split('media/')[-1]}"
+
     def __str__(self):
         return f"{self.label} detected at {self.date_added}"

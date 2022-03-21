@@ -6,6 +6,7 @@ from .views import (
     DeleteCameraView,
     EditCameraView,
     ManageCamerasView,
+    IntruderListView,
 )
 
 urlpatterns = [
@@ -14,4 +15,5 @@ urlpatterns = [
     path("<int:pk>/view/", CameraView.as_view(), name="view_camera"),
     path("<int:pk>/delete/", DeleteCameraView.as_view(), name="delete_camera"),
     path("add-cam/", AddCameraView.as_view(), name="add_camera"),
+    path("intruders/", IntruderListView.as_view(), name="intruder_list"),
 ]
