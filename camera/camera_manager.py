@@ -1,11 +1,8 @@
 from __future__ import annotations
+
 from threading import Thread
 
-from typing import Dict, List, Tuple
-
 import cv2 as cv
-
-# from django.conf import settings
 
 from .camera import CameraSource
 from .detection import DetectionSource, IntruderDetector
@@ -98,13 +95,7 @@ class CameraManager:
                 camera.save()
 
     def update_source(self, camera_instance):
-        old_camera = None
-        for camera_pk in self.cameras:
-            if camera_instance.pk == camera_pk:
-                old_camera = self.cameras[camera_pk]
-
-        if old_camera is None:
-            print("OLD CAMERA IS NONE")
+        old_camera = self.cameras[camera_instance.pk]
 
         old_rtsp_link = old_camera[0].rtsp_url
         if old_rtsp_link != camera_instance.rtsp_url:
@@ -124,3 +115,15 @@ class CameraManager:
             old_source = old_camera[0]
             print("NAME CHANGED")
             old_source.name = camera_instance.name
+
+    def remove_source(self, camera_instance):
+        old_camera = self.cameras[camera_instance.pk]
+        _, source, feed = old_camera
+
+        source.stop()
+        feed.stop()
+        self.cameras.pop(camera_instance.pk)
+
+        self.connect_to_sources()
+        self.update_live_feeds()
+        self.start_detection()

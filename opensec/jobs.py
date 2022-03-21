@@ -1,7 +1,7 @@
 import threading
 import time
 
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from schedule import Scheduler
 
@@ -59,3 +59,10 @@ def update_cameras(sender, instance, created, **kwargs):
             camera_manager.setup_and_update_cameras()
         else:
             camera_manager.update_source(instance)
+
+
+@receiver(post_delete, sender=opensec.models.Camera)
+def remove_camera(sender, instance, **kwargs):
+    if camera_manager is not None:
+        print("Removing camera")
+        camera_manager.remove_source(instance)
