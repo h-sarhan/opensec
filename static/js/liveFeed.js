@@ -5,9 +5,7 @@ function loadVideo(video, source) {
     hls.loadSource(source);
   });
 }
-// let STREAM_URL = JSON.parse(document.getElementById('liveFeedUrl').textContent);
-let STREAM_URL = '/media/stream/Bedroom/index.m3u8';
-console.log(STREAM_URL);
+let STREAM_URL = JSON.parse(document.getElementById('liveFeedUrl').textContent);
 const video = document.getElementById('video');
 const playBtn = document.getElementById('play-btn');
 

@@ -27,11 +27,12 @@ class CameraManager:
 
     def update_live_feeds(self):
         for camera_pk in self.cameras:
-            camera, source, old_feed = self.cameras[camera_pk]
-            if source is not None or old_feed is None:
+            camera, source, _ = self.cameras[camera_pk]
+            if source is not None:
                 feed = LiveFeed(source)
                 stream_link = feed.start()
                 self.cameras[camera_pk][2] = feed
+                print(f"SETTING STREAM LINK TO {stream_link}")
                 camera.stream_link = stream_link
                 camera.save()
 
@@ -39,14 +40,14 @@ class CameraManager:
         if self.detector is not None:
             self.detector.stop_detection()
         self.detector = IntruderDetector(
-            [camera[1] for camera in self.cameras.values()],
+            [camera[1] for camera in self.cameras.values() if camera[1] is not None],
             f"{self.django_settings.MEDIA_ROOT}/intruders",
             self.camera_model,
             self.intruder_model,
             num_frames_to_record=100,
             display_frame=False,
         )
-        Thread(target=self.detector.detect).start()
+        Thread(target=self.detector.detect, args=(30,)).start()
 
     def update_camera_list(self):
         new_camera_list = list(self.camera_model.objects.all())
@@ -78,7 +79,8 @@ class CameraManager:
                     camera.save()
                 except RuntimeError:
                     print(f"Could not connect to camera {camera.name}")
-                    continue
+                except ValueError:
+                    print("Source must be a valid RTSP URL")
 
     def update_snapshots(self):
         for camera_pk in self.cameras:
@@ -101,8 +103,11 @@ class CameraManager:
         if old_rtsp_link != camera_instance.rtsp_url:
             print("SOURCE URL CHANGED")
             old_source, old_feed = old_camera[1:]
-            old_source.stop()
-            old_feed.stop()
+
+            if old_source is not None:
+                old_source.stop()
+                old_feed.stop()
+
             self.cameras.pop(old_camera[0].pk)
             self.cameras[camera_instance.pk] = [camera_instance, None, None]
 
@@ -113,17 +118,19 @@ class CameraManager:
         old_source_name = old_camera[0].name
         if old_source_name != camera_instance.name:
             old_source = old_camera[0]
-            print("NAME CHANGED")
-            old_source.name = camera_instance.name
+            if old_source is not None:
+                old_source.name = camera_instance.name
 
     def remove_source(self, camera_instance):
         old_camera = self.cameras[camera_instance.pk]
         _, source, feed = old_camera
 
-        source.stop()
-        feed.stop()
+        if source is not None:
+            source.stop()
+            feed.stop()
+
         self.cameras.pop(camera_instance.pk)
 
-        self.connect_to_sources()
-        self.update_live_feeds()
+        # self.connect_to_sources()
+        # self.update_live_feeds()
         self.start_detection()

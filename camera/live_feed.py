@@ -53,8 +53,7 @@ class LiveFeed:
     def start(self) -> str:
         if self._stream_process is None:
             self.start_streaming()
-
-        return f"{self.stream_directory}/index.m3u8"
+        return f"/media/stream/{self.source.name}/index.m3u8"
 
     def stop(self) -> None:
         if self._stream_process is not None:
