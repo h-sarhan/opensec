@@ -68,3 +68,10 @@ class DeleteIntruderView(LoginRequiredMixin, DeleteView):
 
     def get_success_url(self):
         return reverse("intruder_list")
+
+
+class IntruderView(LoginRequiredMixin, DetailView):
+    model = Intruder
+    template_name = "view_intruder.html"
+    context_object_name = "intruder"
+    login_url = "account/login"

@@ -10,7 +10,7 @@
         <div class="column is-4">
           <div class="card">
             <div class="card-image">
-                <a href="#" class="image is-4by3">
+                <a href="{% url 'view_intruder' intruder.pk %}" class="image is-4by3">
                   {% if intruder.thumbnail %}
                   <img src="{{intruder.thumbnail_media_url}}" class="intruder-thumbnail" alt="Intruder Snapshot" class="has-ratio"/>
                   {% else %}
@@ -29,7 +29,7 @@
               <div class="content">
                 <div class="container">
                   <div class="buttons is-centered">
-                    <a href="#" class="button is-info">View</a>
+                    <a href="{% url 'view_intruder' intruder.pk %}" class="button is-info">View</a>
                     <a href="{% url 'delete_intruder' intruder.pk %}" class="button is-danger">Delete</a>
                   </div>
                 </div>

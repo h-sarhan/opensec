@@ -25,7 +25,7 @@ NOISE_KERNEL = cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3))
 
 
 class IntruderRecorder:
-    num_frames_to_analyze = 10
+    num_frames_to_analyze = 30
 
     def __init__(
         self,
@@ -75,11 +75,9 @@ class IntruderRecorder:
         video_path = self._rename_video(source)
         if source.is_active:
             print("Creating video writer")
-            output_params = {"-fourcc": "mp4v", "-fps": config.FPS // 2}
+            output_params = {"-input_framerate": config.FPS}
             self._video_writers[source.name] = WriteGear(
                 f"{self.recordings_directory}/videos/{source.name}/intruder.mp4",
-                compression_mode=False,
-                logging=False,
                 **output_params,
             )
 
@@ -89,9 +87,12 @@ class IntruderRecorder:
             thumb_path = self._save_thumb(source)
             paths.append(thumb_path)
 
-        frames_to_analyze = [
-            random.choice(self._stored_frames[source.name])
-            for _ in range(self.num_frames_to_analyze)
+        # frames_to_analyze = [
+        #     random.choice(self._stored_frames[source.name])
+        #     for _ in range(self.num_frames_to_analyze)
+        # ]
+        frames_to_analyze = self._stored_frames[source.name][
+            : self.num_frames_to_analyze
         ]
         self._analyze_intruders(source, frames_to_analyze)
         self._start_times[source.name] = None
@@ -138,11 +139,9 @@ class IntruderRecorder:
 
     def _make_video_writers(self) -> None:
         for source in self.sources:
-            output_params = {"-fourcc": "mp4v", "-fps": config.FPS // 2}
+            output_params = {"-input_framerate": config.FPS}
             self._video_writers[source.name] = WriteGear(
                 f"{self.recordings_directory}/videos/{source.name}/intruder.mp4",
-                compression_mode=False,
-                logging=False,
                 **output_params,
             )
 
@@ -167,10 +166,11 @@ class IntruderRecorder:
     def _analyze_intruders(self, source: DetectionSource, frames: List[np.ndarray]):
         self._is_analyzing = True
         predictions: List[str] = []
-        for random_frame in frames:
-            frame_labels = self._analyzer.analyze_frame(random_frame)
-            if frame_labels is not None:
-                predictions.extend(frame_labels)
+        for frame in frames:
+            if frame is not None:
+                frame_labels = self._analyzer.analyze_frame(frame)
+                if frame_labels is not None:
+                    predictions.extend(frame_labels)
 
         self._intruder_labels[source.name] = predictions
         self._is_analyzing = False
@@ -285,7 +285,7 @@ class IntruderDetector:
         recording_directory: str,
         camera_model,
         intruder_model,
-        num_frames_to_record: int = 30,
+        num_frames_to_record: int = 60,
         display_frame: bool = False,
     ):
         self.detection_sources = detection_sources
@@ -454,13 +454,13 @@ class IntruderDetector:
                 )
 
     def _save_recordings(self, source: DetectionSource) -> None:
-        num_frames_recorded = self._recorder.get_num_frames_recorded(source)
-        if num_frames_recorded > self._max_frames_to_record // 2:
-            paths = self._recorder.save(source, thumb=True)
-            if len(paths) == 2:
-                self.add_intruder(source, video_path=paths[0], thumb_path=paths[1])
-            else:
-                self.add_intruder(source, video_path=paths[0])
+        # num_frames_recorded = self._recorder.get_num_frames_recorded(source)
+        # if num_frames_recorded > self._max_frames_to_record // 2:
+        paths = self._recorder.save(source, thumb=True)
+        if len(paths) == 2:
+            self.add_intruder(source, video_path=paths[0], thumb_path=paths[1])
+        else:
+            self.add_intruder(source, video_path=paths[0])
 
 
 class IntruderAnalyzer:
@@ -510,7 +510,7 @@ class IntruderAnalyzer:
         for i in np.arange(0, detections.shape[2]):
             # Get confidence score
             confidence = detections[0, 0, i, 2]
-            if confidence > 0.5:
+            if confidence > 0.35:
                 class_id = int(detections[0, 0, i, 1])
                 predicted_labels.append((self.ssd_classes[class_id], confidence))
 

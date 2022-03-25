@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %} Intruder {% endblock title %}
+
+{% block content %}
+  <div class="columns">
+    <div class="column is-12">
+      <div class="container pt-6">
+        <div class="box">
+
+          <h1 class="title has-text-centered">Intruder Recording</h1>
+          <div class="video-container is-centered">
+            <video
+              width="1280px"
+              class="video-js"
+              controls
+              preload="auto"
+              data-setup="{}"
+            >
+              <source src="{{intruder.video_media_url}}" type="video/mp4" />
+            </video>
+          </div>
+        </div>
+      </div>
+    </div>
+<script src="https://vjs.zencdn.net/7.18.1/video.min.js"></script>
+{% endblock content %}

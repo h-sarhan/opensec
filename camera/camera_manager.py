@@ -47,7 +47,7 @@ class CameraManager:
             num_frames_to_record=100,
             display_frame=False,
         )
-        Thread(target=self.detector.detect, args=(30,)).start()
+        Thread(target=self.detector.detect, args=(20,)).start()
 
     def update_camera_list(self):
         new_camera_list = list(self.camera_model.objects.all())
