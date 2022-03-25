@@ -122,7 +122,7 @@ class IntruderRecorder:
         thumb_path = f"{base_dir}/{thumb_name}.jpg"
         stored_frames = self._stored_frames[source.name]
         if stored_frames is not None and len(stored_frames) != 0:
-            thumb_frame = random.choice(stored_frames)
+            thumb_frame = stored_frames[len(stored_frames) // 2]
             if thumb_frame is not None:
                 cv.imwrite(thumb_path, thumb_frame)
                 return thumb_path
@@ -259,7 +259,7 @@ class DetectionSource:
             if display_frame is None:
                 break
 
-            DetectionSource._draw_bounding_boxes(display_frame, contour)
+            # DetectionSource._draw_bounding_boxes(display_frame, contour)
         return filtered_contours
 
     @staticmethod
@@ -407,7 +407,7 @@ class IntruderDetector:
     ) -> None:
 
         if source.conseq_motion_frames >= min_conseq_frames:
-            print(f"intruder detected at {source.name}")
+            print(f"motion detected at {source.name}")
             self.record_frame(frame, source)
 
     def record_frame(self, frame: np.ndarray, source: DetectionSource) -> None:
@@ -437,6 +437,7 @@ class IntruderDetector:
 
         # If no label is produced then don't add intruder to database
         if label is not None:
+            print("Saving recording and adding intruder to database")
             camera = self.camera_model.objects.get(name=source.name)
             if thumb_path is not None:
                 self.intruder_model.objects.create(
@@ -455,7 +456,6 @@ class IntruderDetector:
     def _save_recordings(self, source: DetectionSource) -> None:
         num_frames_recorded = self._recorder.get_num_frames_recorded(source)
         if num_frames_recorded > self._max_frames_to_record // 2:
-            print("Saving recording and adding intruder to database")
             paths = self._recorder.save(source, thumb=True)
             if len(paths) == 2:
                 self.add_intruder(source, video_path=paths[0], thumb_path=paths[1])

@@ -10,7 +10,6 @@ from .apps import camera_manager
 
 
 def startup_job():
-    print("UPDATING CAMERAS")
     print("CONNECTING TO SOURCES")
     camera_manager.setup_and_update_cameras()
 

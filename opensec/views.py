@@ -58,3 +58,13 @@ class AddCameraView(LoginRequiredMixin, CreateView):
 
     def get_success_url(self):
         return reverse("manage_cameras")
+
+
+class DeleteIntruderView(LoginRequiredMixin, DeleteView):
+    model = Intruder
+    template_name = "delete_intruder.html"
+    context_object_name = "intruder"
+    login_url = "account/login"
+
+    def get_success_url(self):
+        return reverse("intruder_list")

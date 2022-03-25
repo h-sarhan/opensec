@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from threading import Thread
 
 import cv2 as cv
@@ -19,7 +20,6 @@ class CameraManager:
 
     def setup_and_update_cameras(self):
         self.update_camera_list()
-
         self.connect_to_sources()
         self.update_snapshots()
         self.update_live_feeds()

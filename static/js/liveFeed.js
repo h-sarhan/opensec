@@ -8,13 +8,11 @@ function loadVideo(video, source) {
 let STREAM_URL = JSON.parse(document.getElementById('liveFeedUrl').textContent);
 const video = document.getElementById('video');
 const playBtn = document.getElementById('play-btn');
-
 loadVideo(video, STREAM_URL);
 
-// playBtn.addEventListener('click', () => {
-// });
-
 video.play();
+video.currentTime = video.duration - 10;
+
 setInterval(() => {
-  video.currentTime = video.duration - 4;
+  video.currentTime = video.duration - 10;
 }, 10000);

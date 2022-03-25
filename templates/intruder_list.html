@@ -5,10 +5,9 @@
 
 {%block content %}
   <div class="container pt-5">
-    <div class="columns is-multiline is-centered mx-6 my-4 is-vcentered">
+    <div class="columns is-multiline is-centered mx-4 my-4 is-vcentered">
       {% for intruder in intruders %}
-      <h1>{{intruder.thumbnail_media_url}}</h1>
-        <div class="column is-3">
+        <div class="column is-4">
           <div class="card">
             <div class="card-image">
                 <a href="#" class="image is-4by3">
@@ -22,7 +21,17 @@
             <div class="card-content">
               <div class="media">
                 <div class="media-content">
-                  <p class="title is-5 has-text-centered">{{intruder.label}}</p>
+                  <p class="title is-size-4 has-text-centered">{{intruder.label|title}} detected in {{intruder.camera.name}}</p>
+                  <p class="is-size-5 has-text-centered">Date: {{intruder.date_added}}</p>
+                </div>
+              </div>
+
+              <div class="content">
+                <div class="container">
+                  <div class="buttons is-centered">
+                    <a href="#" class="button is-info">View</a>
+                    <a href="{% url 'delete_intruder' intruder.pk %}" class="button is-danger">Delete</a>
+                  </div>
                 </div>
               </div>
 

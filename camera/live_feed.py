@@ -63,3 +63,6 @@ class LiveFeed:
     def _make_dir(self) -> None:
         if not os.path.exists(self.stream_directory):
             os.mkdir(self.stream_directory)
+        else:
+            for file in os.listdir(self.stream_directory):
+                os.remove(f"{self.stream_directory}/{file}")
