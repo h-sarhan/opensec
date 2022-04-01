@@ -3,7 +3,7 @@ from time import sleep
 import unittest
 
 import numpy as np
-from camera import VideoSource, DetectionSource, IntruderDetector, IntruderRecorder
+from camera import VideoSource, DetectionSource, IntruderDetector
 from config import TEST_VID_DIRECTORY, TEST_VIDEO_OUTPUT_DIRECTORY
 
 

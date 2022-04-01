@@ -5,7 +5,6 @@ TODO
 from __future__ import annotations
 
 import os
-import random
 import time
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
@@ -19,13 +18,11 @@ from . import CameraSource, VideoSource
 
 NOISE_KERNEL = cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3))
 
-# TODO: Add object detection
-# TODO: Clean dependencies
 # TODO: DOCUMENTATION
 
 
 class IntruderRecorder:
-    num_frames_to_analyze = 30
+    num_frames_to_analyze = 50
 
     def __init__(
         self,
@@ -510,7 +507,7 @@ class IntruderAnalyzer:
         for i in np.arange(0, detections.shape[2]):
             # Get confidence score
             confidence = detections[0, 0, i, 2]
-            if confidence > 0.35:
+            if confidence > 0.20:
                 class_id = int(detections[0, 0, i, 1])
                 predicted_labels.append((self.ssd_classes[class_id], confidence))
 

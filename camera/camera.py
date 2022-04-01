@@ -12,8 +12,6 @@ import config
 import cv2 as cv
 from vidgear.gears import VideoGear
 
-# TODO: Add logging and error handling
-# TODO: Create BaseSource or Source class
 # TODO: DOCUMENTATION
 
 

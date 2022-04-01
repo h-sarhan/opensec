@@ -6,7 +6,6 @@ test_video_output/
 yolo/
 main.py
 inputs.txt
-ssd/
 .vidgear/
 media/camera_snaps
 main.py.lprof
