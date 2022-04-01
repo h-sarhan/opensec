@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from threading import Thread
 
 import cv2 as cv
@@ -11,6 +10,10 @@ from .live_feed import LiveFeed
 
 
 class CameraManager:
+    """
+    This class is used to sync the state of the application with the database
+    """
+
     def __init__(self):
         self.detector: IntruderDetector | None = None
         self.cameras = {}
@@ -26,6 +29,9 @@ class CameraManager:
         self.start_detection()
 
     def update_live_feeds(self):
+        """
+        Creates live feeds based on camera in the database
+        """
         for camera_pk in self.cameras:
             camera, source, _ = self.cameras[camera_pk]
             if source is not None:
@@ -37,6 +43,9 @@ class CameraManager:
                 camera.save()
 
     def start_detection(self):
+        """
+        Starts detecting intruders
+        """
         if self.detector is not None:
             self.detector.stop_detection()
         self.detector = IntruderDetector(
@@ -50,6 +59,9 @@ class CameraManager:
         Thread(target=self.detector.detect, args=(20,)).start()
 
     def update_camera_list(self):
+        """
+        Updates the camera sources used by OpenSec to match the ones in the database
+        """
         new_camera_list = list(self.camera_model.objects.all())
         for camera in new_camera_list:
             if camera.pk not in self.cameras:
@@ -65,6 +77,10 @@ class CameraManager:
                 feed.stop()
 
     def connect_to_sources(self):
+        """
+        Initialize camera sources and connect to them using the names and rtsp links
+        present in the database.
+        """
         for camera_pk in self.cameras:
             camera, old_source, _ = self.cameras[camera_pk]
             if not camera.is_active or old_source is None:
@@ -83,6 +99,9 @@ class CameraManager:
                     print("Source must be a valid RTSP URL")
 
     def update_snapshots(self):
+        """
+        Take a screenshot of the live feed of the camera sources and save it to disk
+        """
         for camera_pk in self.cameras:
             camera, source = self.cameras[camera_pk][:2]
             if source is None:
@@ -97,6 +116,9 @@ class CameraManager:
                 camera.save()
 
     def update_source(self, camera_instance):
+        """
+        This function is called when a camera is added or edited in the database
+        """
         old_camera = self.cameras[camera_instance.pk]
 
         old_rtsp_link = old_camera[0].rtsp_url
@@ -122,6 +144,9 @@ class CameraManager:
                 old_source.name = camera_instance.name
 
     def remove_source(self, camera_instance):
+        """
+        This function is called when a camera is removed from the database
+        """
         old_camera = self.cameras[camera_instance.pk]
         _, source, feed = old_camera
 
@@ -130,7 +155,4 @@ class CameraManager:
             feed.stop()
 
         self.cameras.pop(camera_instance.pk)
-
-        # self.connect_to_sources()
-        # self.update_live_feeds()
         self.start_detection()

@@ -1,7 +1,3 @@
-"""
-TODO
-"""
-
 from __future__ import annotations
 
 import os
@@ -18,10 +14,12 @@ from . import CameraSource, VideoSource
 
 NOISE_KERNEL = cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3))
 
-# TODO: DOCUMENTATION
-
 
 class IntruderRecorder:
+    """
+    This class is used to record videos of detected intruders
+    """
+
     num_frames_to_analyze = 50
 
     def __init__(
@@ -48,11 +46,12 @@ class IntruderRecorder:
         return self._intruder_labels
 
     def get_num_frames_recorded(self, source: DetectionSource) -> int:
-
         return len(self._stored_frames[source.name])
 
     def add_frame(self, frame: np.ndarray | None, source: DetectionSource) -> None:
-
+        """
+        Adds a frame to be written to a video file
+        """
         if self._start_times[source.name] is None:
             current_date_time = datetime.now().strftime("%Y_%m_%d %Hh %Mm %Ss")
             self._start_times[source.name] = current_date_time
@@ -66,7 +65,11 @@ class IntruderRecorder:
             writer.write(frame)
 
     def save(self, source: DetectionSource, thumb: bool = True) -> List[str]:
-
+        """
+        Stops adding frames to video and writes it to the disk.
+        If `thumb` is True then a thumbnail is also produced from the recorded frames
+        Returns paths to the thumbnail and video
+        """
         writer = self._video_writers[source.name]
         writer.close()
         video_path = self._rename_video(source)
@@ -84,10 +87,6 @@ class IntruderRecorder:
             thumb_path = self._save_thumb(source)
             paths.append(thumb_path)
 
-        # frames_to_analyze = [
-        #     random.choice(self._stored_frames[source.name])
-        #     for _ in range(self.num_frames_to_analyze)
-        # ]
         frames_to_analyze = self._stored_frames[source.name][
             : self.num_frames_to_analyze
         ]
@@ -97,6 +96,11 @@ class IntruderRecorder:
         return paths
 
     def _rename_video(self, source: DetectionSource) -> str:
+        """
+        Renames a video from the default `intruder.mp4` to a name containing
+        the time the intruder was detected.
+        Returns the new name of the video
+        """
 
         videos_directory = f"{self.recordings_directory}/videos"
         base_name = f"{videos_directory}/{source.name}"
@@ -113,6 +117,9 @@ class IntruderRecorder:
         return new_file_path
 
     def _save_thumb(self, source: DetectionSource) -> str | None:
+        """
+        Creates a thumbnail from the recorded frames and saves it to disk
+        """
 
         thumbnails_directory = f"{self.recordings_directory}/thumbnails"
         base_dir = f"{thumbnails_directory}/{source.name}"
@@ -127,6 +134,10 @@ class IntruderRecorder:
         return None
 
     def _setup(self) -> None:
+        """
+        Sets up the video writers and creates directories for each
+        source to store recorded videos
+        """
 
         self._make_paths()
         self._make_video_writers()
@@ -135,6 +146,9 @@ class IntruderRecorder:
             self._stored_frames[source.name] = []
 
     def _make_video_writers(self) -> None:
+        """
+        Used by _setup() to create video writers
+        """
         for source in self.sources:
             output_params = {"-input_framerate": config.FPS}
             self._video_writers[source.name] = WriteGear(
@@ -143,6 +157,9 @@ class IntruderRecorder:
             )
 
     def _make_paths(self) -> None:
+        """
+        Used by _setup() to make directories to store videos
+        """
         if not os.path.exists(self.recordings_directory):
             os.mkdir(self.recordings_directory)
 
@@ -161,6 +178,10 @@ class IntruderRecorder:
                     os.mkdir(f"{directory}/{source.name}")
 
     def _analyze_intruders(self, source: DetectionSource, frames: List[np.ndarray]):
+        """
+        Uses the IntruderAnalyzer class to get predictions on what the type of
+        the intruder is
+        """
         self._is_analyzing = True
         predictions: List[str] = []
         for frame in frames:
@@ -174,6 +195,11 @@ class IntruderRecorder:
 
 
 class DetectionSource:
+    """
+    Similar to CameraSource or VideoSource, but with additional functionality to
+    be able to detect intruders
+    """
+
     def __init__(self, name: str, source: CameraSource | VideoSource):
         self.name = name
         self.source = source
@@ -186,38 +212,47 @@ class DetectionSource:
         )
 
     def get_rtsp_link(self):
+        """
+        Returns an rtsp link (only to be used with camera sources)
+        """
         return self.source.source
 
     @property
     def is_active(self) -> bool:
-
+        """
+        Returns whether or not the camera is active
+        """
         return self.source.is_active
 
     def start(self) -> None:
-
+        """
+        Starts reading from the source and updating the current_frame
+        """
         self.source.start()
 
     def stop(self) -> None:
-
+        """
+        Stops reading from the source
+        """
         if self.is_active:
             self.conseq_motion_frames = 0
             self.source.stop()
 
     def read(self, resize_frame: Optional[Tuple[int, int]] = None) -> np.ndarray | None:
-
+        """
+        Returns a frame from the source
+        """
         frame = self.source.read(resize_frame)
-        # read_attempts = 0
-        # while frame is None and read_attempts < 3:
-        #     time.sleep(0.5)
-        #     frame = self.source.read()
-        #     read_attempts += 1
-
         if frame is None:
             self.stop()
 
         return frame
 
     def get_foreground_mask(self, frame: np.ndarray) -> np.ndarray:
+        """
+        Uses a background subtractor to generate a foreground mask that can
+        be used to detect motion
+        """
 
         foreground_mask = self._bg_subtractor.apply(frame)
 
@@ -229,6 +264,11 @@ class DetectionSource:
     def find_contours(
         self, foreground_mask: np.ndarray, display_frame: Optional[np.ndarray] = None
     ) -> List[np.ndarray]:
+        """
+        Takes a foreground mask and finds contours, which are outlines of potential
+        moving objects. The presence of these contours can be used to detect whether
+        or not an intruder is present.
+        """
 
         detection_mode = cv.RETR_EXTERNAL
         detection_method = cv.CHAIN_APPROX_SIMPLE
@@ -240,6 +280,9 @@ class DetectionSource:
     def filter_contours(
         self, contours: List[np.ndarray], display_frame: Optional[np.ndarray] = None
     ) -> List[np.ndarray]:
+        """
+        Remove contours whose area is too small.
+        """
 
         filtered_contours: List[np.ndarray] = []
 
@@ -247,7 +290,7 @@ class DetectionSource:
         for contour in contours:
             # Remove small instances of detected motion
             # this will mostly be lighting changes
-            if cv.contourArea(contour) < 3000:
+            if cv.contourArea(contour) < 1500:
                 continue
 
             filtered_contours.append(contour)
@@ -276,6 +319,10 @@ class DetectionSource:
 
 
 class IntruderDetector:
+    """
+    Main class used to detect intruders
+    """
+
     def __init__(
         self,
         detection_sources: List[DetectionSource],
@@ -297,11 +344,18 @@ class IntruderDetector:
         )
 
     def start_sources(self) -> None:
+        """
+        Starts reading frames from all sources
+        """
 
         for source in self.detection_sources:
             source.start()
 
     def get_intruder_labels(self) -> Dict[str, str] | None:
+        """
+        Gets predicted labels of the intruder currently being recorded
+        """
+
         labels = self._recorder.get_labels()
         if labels is None:
             return labels
@@ -326,6 +380,9 @@ class IntruderDetector:
     def read_frame(
         self, source: DetectionSource, resize_frame: Tuple[int, int] = None
     ) -> np.ndarray | None:
+        """
+        Read a frame from a detection source
+        """
 
         frame = source.read(resize_frame)
 
@@ -345,7 +402,10 @@ class IntruderDetector:
                 self._save_recordings(source)
             source.conseq_motion_frames = 0
 
-    def detect(self, min_conseq_frames: int = 15) -> None:
+    def detect(self, min_conseq_frames: int = 10) -> None:
+        """
+        Start the intruder detection process
+        """
 
         self._detection_status = True
 
@@ -429,6 +489,10 @@ class IntruderDetector:
     def add_intruder(
         self, source: DetectionSource, video_path: str, thumb_path: Optional[str] = None
     ):
+        """
+        Adds an intruder to the database
+        """
+
         intruder_labels = self.get_intruder_labels()
         label = intruder_labels.get(source.name, None)
 
@@ -451,8 +515,6 @@ class IntruderDetector:
                 )
 
     def _save_recordings(self, source: DetectionSource) -> None:
-        # num_frames_recorded = self._recorder.get_num_frames_recorded(source)
-        # if num_frames_recorded > self._max_frames_to_record // 2:
         paths = self._recorder.save(source, thumb=True)
         if len(paths) == 2:
             self.add_intruder(source, video_path=paths[0], thumb_path=paths[1])
@@ -487,13 +549,18 @@ class IntruderAnalyzer:
     ]
 
     def __init__(self):
-        # Path to Yolo weights and configuration files
+        # Path to SSD weights and configuration files
         ssd_weights = "./ssd/MobileNetSSD_deploy.caffemodel"
         ssd_config = "./ssd/MobileNetSSD_deploy.prototxt"
 
         self.net = cv.dnn.readNetFromCaffe(ssd_config, ssd_weights)
 
     def analyze_frame(self, frame: np.ndarray) -> List[str] | None:
+        """
+        Uses a deep learning object detector to analyze the frames of motion
+        Returns a list of predicted labels
+        """
+
         # Convert the frame into an appropriate format for SSD
         if frame is None:
             print("frame passed to analyze_frame is None")

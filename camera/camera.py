@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import json
 import shutil
 import subprocess
@@ -6,16 +7,17 @@ import time
 from threading import Thread
 from typing import Optional, Tuple
 
-import numpy as np
-
 import config
 import cv2 as cv
+import numpy as np
 from vidgear.gears import VideoGear
-
-# TODO: DOCUMENTATION
 
 
 class CameraSource:
+    """
+    Class that represents a single IP camera
+    """
+
     def __init__(self, name: str, source: str, max_reset_attempts: int = 5):
         """
         Inits Camera objects.
@@ -33,23 +35,22 @@ class CameraSource:
 
         self._connect_to_cam()
 
-    # @property
-    # def fps(self):
-    #     return self._camera.framerate
-
     @property
     def is_active(self) -> bool:
         """
-        TODO
+        Returns whether the camera is active
         """
         return self._camera_open and self._connected
 
     def get_rtsp_link(self):
+        """
+        Returns the rtsp link of the IP camera
+        """
         return self.source
 
     def start(self) -> CameraSource:
         """
-        TODO
+        Starts reading frames from the camera
         """
         if self._camera_open:
             print(f"Camera {self.name} is already on")
@@ -62,7 +63,7 @@ class CameraSource:
 
     def read(self, resize_frame: Optional[Tuple[int, int]] = None) -> np.ndarray | None:
         """
-        TODO
+        Returns a frame from the camera source and optionally resizes it
         """
         if resize_frame and self._current_frame is not None:
             return cv.resize(
@@ -73,6 +74,10 @@ class CameraSource:
         return self._current_frame
 
     def _update_frame(self) -> None:
+        """
+        Updates the current frame, with a new one.
+        This function will be continuously running in the background
+        """
 
         while self.is_active:
             # Read a frame from the camera
@@ -93,6 +98,9 @@ class CameraSource:
             time.sleep(1 / config.FPS)
 
     def stop(self) -> None:
+        """
+        Stops the camera source
+        """
         print(f"Stopping camera source {self.name}.")
         self._connected = False
         self._camera_open = False
@@ -103,6 +111,11 @@ class CameraSource:
 
     @staticmethod
     def check_source_alive(source: str, timeout: int = 5) -> bool:
+        """
+        Small script that uses ffprobe with a timeout to check whether or not
+        the source is alive. This is much faster than connecting to the
+        camera then failing
+        """
         if not shutil.which("ffprobe"):
             raise RuntimeError("ERROR: Please install ffmpeg/ffprobe.")
 
@@ -134,6 +147,9 @@ class CameraSource:
 
     @staticmethod
     def validate_source_url(source: str) -> str:
+        """
+        Validates the rtsp link
+        """
 
         err_message = "ERROR: Source must be an RTSP URL"
         if not isinstance(source, str):
@@ -148,6 +164,9 @@ class CameraSource:
         return source
 
     def _connect_to_cam(self) -> None:
+        """
+        Connects to an IP camera on the network
+        """
         if not CameraSource.check_source_alive(self.source):
             raise RuntimeError(f"ERROR: Could not connect to camera {self.name}.")
         try:
@@ -165,6 +184,10 @@ class CameraSource:
             ) from err
 
     def _reconnect(self) -> None:
+        """
+        Reconnects to a camera if it gets disconnected for whatever reason
+        Will attempt a reconnection `_max_reconnect_attempts` times
+        """
         while self._reconnect_attempts < self._max_reconnect_attempts:
             print(f"{self.name} reconnection attempt #{self._reconnect_attempts+1}")
 
@@ -175,8 +198,8 @@ class CameraSource:
                 self._camera.stop()
 
             if CameraSource.check_source_alive(self.source):
-                print("Source alive. Attempting reconnection")
                 try:
+                    print(f"{self.name} alive. Attempting reconnection")
                     options = {"THREADED_QUEUE_MODE": False}
                     camera = VideoGear(
                         source=self.source, logging=True, time_delay=2, **options
@@ -184,9 +207,12 @@ class CameraSource:
                     self._connected = True
                     self._camera = camera
                     self._reconnect_attempts = 0
+                    print(f"Reconnection to {self.name} successful")
                     return
                 except RuntimeError:
                     pass
+            else:
+                print(f"{self.name} is not alive.")
 
         raise RuntimeError("ERROR: Could not reconnect to camera")
 
@@ -198,6 +224,11 @@ class CameraSource:
 
 
 class VideoSource:
+    """
+    Represents a video source.
+    Mostly used for testing purposes and is not really part of OpenSec
+    """
+
     def __init__(self, video_path: str):
         self.name = video_path.split("/")[-1]
         self._vid_cap = VideoGear(source=video_path)
