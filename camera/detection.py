@@ -290,7 +290,7 @@ class DetectionSource:
         for contour in contours:
             # Remove small instances of detected motion
             # this will mostly be lighting changes
-            if cv.contourArea(contour) < 1500:
+            if cv.contourArea(contour) < 1000:
                 continue
 
             filtered_contours.append(contour)
@@ -574,7 +574,7 @@ class IntruderAnalyzer:
         for i in np.arange(0, detections.shape[2]):
             # Get confidence score
             confidence = detections[0, 0, i, 2]
-            if confidence > 0.20:
+            if confidence > 0.30:
                 class_id = int(detections[0, 0, i, 1])
                 predicted_labels.append((self.ssd_classes[class_id], confidence))
 

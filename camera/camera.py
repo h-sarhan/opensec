@@ -20,7 +20,7 @@ class CameraSource:
 
     def __init__(self, name: str, source: str, max_reset_attempts: int = 5):
         """
-        Inits Camera objects.
+        Inits CameraSource objects.
         """
         self.name = name
         self.source = CameraSource.validate_source_url(source)

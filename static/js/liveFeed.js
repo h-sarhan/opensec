@@ -11,7 +11,6 @@ const playBtn = document.getElementById('play-btn');
 loadVideo(video, STREAM_URL);
 
 video.play();
-video.currentTime = video.duration - 10;
 
 setInterval(() => {
   video.currentTime = video.duration - 10;
