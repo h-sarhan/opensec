@@ -563,7 +563,6 @@ class IntruderAnalyzer:
 
         # Convert the frame into an appropriate format for SSD
         if frame is None:
-            print("frame passed to analyze_frame is None")
             return None
         blob = cv.dnn.blobFromImage(frame, 0.007843, (300, 300), 127.5)
         self.net.setInput(blob)
@@ -574,7 +573,7 @@ class IntruderAnalyzer:
         for i in np.arange(0, detections.shape[2]):
             # Get confidence score
             confidence = detections[0, 0, i, 2]
-            if confidence > 0.30:
+            if confidence > 0.25:
                 class_id = int(detections[0, 0, i, 1])
                 predicted_labels.append((self.ssd_classes[class_id], confidence))
 
