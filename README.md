@@ -1,6 +1,6 @@
 # OpenSec
 
-OpenSec is a complete home surveillance system solution that emphasizes privacy and ease of use above all else. 
+OpenSec is a complete home surveillance and intruder detection system that emphasizes privacy and ease of use above all else. 
 
 # Features
 - All of OpenSec's components are stored locally on your own system, and none of its functionality requires a connection to a remote database or cloud provider
